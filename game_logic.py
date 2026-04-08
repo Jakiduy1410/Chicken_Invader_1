@@ -1,0 +1,573 @@
+# =============================================================================
+# FILE: game_logic.py
+# MÔ TẢ: Trung tâm điều phối logic game — "bộ não" của toàn bộ project.
+#         Class Game quản lý: vòng lặp chính, đội hình gà (EnemyFleet),
+#         va chạm, điểm số, chuyển Wave, và trạng thái Game Over / Win.
+#
+# PHÂN CÔNG TEAM:
+#   - Class EnemyFleet → Dev phụ trách đội hình & chuyển động gà
+#   - Class Game       → Dev phụ trách va chạm, level, và UI điểm số
+# =============================================================================
+
+import pygame
+import sys
+from settings import *
+from sprites import Player, Enemy, Bullet, Egg
+
+
+# =============================================================================
+# CLASS: EnemyFleet
+# MÔ TẢ: Quản lý toàn bộ đội hình gà (grid formation).
+#         Điều phối chuyển động đồng bộ: ngang → chạm biên → hạ xuống → đổi chiều.
+# =============================================================================
+class EnemyFleet:
+
+    def __init__(self, all_sprites_group, enemies_group, eggs_group):
+        """
+        Khởi tạo đội hình gà dạng lưới (rows × cols).
+
+        Tham số:
+            all_sprites_group (pygame.sprite.Group): Group chứa tất cả sprite để render.
+            enemies_group     (pygame.sprite.Group): Group riêng cho Enemy để detect collision.
+            eggs_group        (pygame.sprite.Group): Group riêng cho Egg để detect collision.
+        """
+        # Tham chiếu đến các Group bên ngoài (không tạo mới để tránh mất liên kết)
+        self.all_sprites = all_sprites_group
+        self.enemies     = enemies_group
+        self.eggs        = eggs_group
+
+        # Hướng di chuyển ngang: +1 = sang phải, -1 = sang trái
+        self.direction = 1
+
+        # Tốc độ hiện tại — có thể tăng theo wave
+        self.speed_x = ENEMY_SPEED_X
+
+        # Tạo đội hình lần đầu
+        self._spawn_fleet()
+
+    def _spawn_fleet(self):
+        """
+        (Private) Sinh toàn bộ đội hình gà theo dạng lưới.
+        Được gọi khi bắt đầu game hoặc bắt đầu wave mới.
+
+        Logic tính vị trí:
+            - Lấy khoảng không gian ngang tổng thể rồi căn giữa màn hình.
+            - Mỗi con gà cách nhau ENEMY_H_SPACING / ENEMY_V_SPACING pixel.
+        """
+        # Tính tổng chiều rộng của lưới để căn giữa màn hình
+        total_grid_width  = (ENEMY_COLS - 1) * ENEMY_H_SPACING
+        start_x = (SCREEN_WIDTH - total_grid_width) // 2  # X của cột đầu tiên
+
+        for row in range(ENEMY_ROWS):
+            for col in range(ENEMY_COLS):
+                # Tính tọa độ tâm của từng con gà
+                x = start_x + col * ENEMY_H_SPACING
+                y = ENEMY_GRID_TOP + row * ENEMY_V_SPACING
+
+                enemy = Enemy(x, y)
+                self.all_sprites.add(enemy)
+                self.enemies.add(enemy)
+
+    def update(self):
+        """
+        Gọi mỗi frame. Điều phối chuyển động toàn đội hình:
+        1. Di chuyển tất cả gà sang trái hoặc phải.
+        2. Phát hiện khi bất kỳ con gà nào chạm biên màn hình.
+        3. Nếu chạm biên: đảo hướng và hạ toàn đội hình xuống.
+
+        Trả về:
+            bool: True nếu đội hình đã hạ xuống quá thấp (Player thua).
+        """
+        # Cờ báo có cần đổi chiều không
+        should_reverse = False
+
+        for enemy in self.enemies:
+            # Di chuyển ngang theo hướng hiện tại
+            enemy.rect.x += self.speed_x * self.direction
+
+            # Kiểm tra chạm biên PHẢI
+            if enemy.rect.right >= SCREEN_WIDTH:
+                should_reverse = True
+                break  # Chỉ cần 1 con chạm là đủ để đổi chiều
+
+            # Kiểm tra chạm biên TRÁI
+            if enemy.rect.left <= 0:
+                should_reverse = True
+                break
+
+        if should_reverse:
+            self._reverse_and_drop()
+
+        # Kiểm tra xem đội hình có hạ xuống quá thấp chưa (gà chạm vùng Player)
+        for enemy in self.enemies:
+            if enemy.rect.bottom >= SCREEN_HEIGHT - 60:
+                return True  # Báo hiệu Game Over
+
+        return False  # Đội hình vẫn trong giới hạn an toàn
+
+    def _reverse_and_drop(self):
+        """
+        (Private) Đảo chiều di chuyển và hạ toàn bộ đội hình xuống một bậc.
+        Đồng thời đẩy tất cả gà về phía trong màn hình để tránh bị kẹt ở biên.
+        Sau đó, chọn ngẫu nhiên một số gà để thả trứng.
+        """
+        self.direction *= -1  # Đảo chiều: +1 → -1 hoặc ngược lại
+
+        for enemy in self.enemies:
+            # Hạ thấp xuống theo ENEMY_DROP_Y
+            enemy.rect.y += ENEMY_DROP_Y
+
+            # Đẩy gà vào trong màn hình nếu vẫn đang tràn ra ngoài
+            if enemy.rect.right > SCREEN_WIDTH:
+                enemy.rect.right = SCREEN_WIDTH
+            if enemy.rect.left < 0:
+                enemy.rect.left = 0
+
+        # Thả trứng: chọn ngẫu nhiên EGG_DROP_COUNT gà để thả trứng
+        import random
+        if len(self.enemies) >= EGG_DROP_COUNT:
+            droppers = random.sample(list(self.enemies), EGG_DROP_COUNT)
+        else:
+            droppers = list(self.enemies)  # Nếu ít gà hơn, thả tất cả
+
+        for enemy in droppers:
+            egg = Egg(enemy.rect.centerx, enemy.rect.bottom)
+            self.all_sprites.add(egg)
+            self.eggs.add(egg)
+
+    def increase_speed(self, increment=SPEED_INCREMENT):
+        """
+        Tăng tốc độ đội hình — gọi khi bắt đầu wave mới.
+
+        Tham số:
+            increment (float): Lượng tăng thêm (mặc định lấy từ settings.py).
+        """
+        self.speed_x += increment
+
+    def is_empty(self):
+        """
+        Kiểm tra xem đội hình đã bị tiêu diệt hết chưa.
+
+        Trả về:
+            bool: True nếu không còn con gà nào.
+        """
+        return len(self.enemies) == 0
+
+    def reset(self, new_speed=None):
+        """
+        Xóa đội hình cũ và tạo lại đội hình mới — dùng khi chuyển wave.
+
+        Tham số:
+            new_speed (float | None): Nếu truyền vào, đặt lại tốc độ cụ thể.
+        """
+        # Xóa toàn bộ gà hiện tại khỏi cả hai group
+        self.enemies.empty()
+
+        if new_speed is not None:
+            self.speed_x = new_speed
+
+        self.direction = 1  # Reset hướng về phải
+        self._spawn_fleet()  # Tạo lại đội hình
+
+
+# =============================================================================
+# CLASS: Game
+# MÔ TẢ: Lớp trung tâm điều phối toàn bộ game.
+#         Quản lý: vòng lặp game, sự kiện, va chạm, điểm số, wave, HUD.
+# =============================================================================
+class Game:
+
+    def __init__(self):
+        """
+        Khởi tạo toàn bộ hệ thống game:
+        - Khởi động Pygame engine.
+        - Tạo màn hình và clock.
+        - Tạo các Sprite Group.
+        - Tạo Player và EnemyFleet.
+        - Thiết lập điểm số và trạng thái ban đầu.
+        """
+        pygame.init()
+
+        # --- Cửa sổ game ---
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption(TITLE)
+
+        # --- Clock để giới hạn FPS ---
+        self.clock = pygame.time.Clock()
+
+        # --- Font chữ cho HUD (Heads-Up Display) ---
+        self.font_large  = pygame.font.SysFont("consolas", 36, bold=True)
+        self.font_medium = pygame.font.SysFont("consolas", 24)
+        self.font_small  = pygame.font.SysFont("consolas", 18)
+
+        # --- Sprite Groups ---
+        # Group chứa TẤT CẢ sprite — dùng để render (draw) và update
+        self.all_sprites = pygame.sprite.Group()
+        # Group riêng cho Enemy — dùng để kiểm tra va chạm đạn-gà
+        self.enemies     = pygame.sprite.Group()
+        # Group riêng cho Bullet — dùng để kiểm tra va chạm đạn-gà và gà-player
+        self.bullets     = pygame.sprite.Group()
+        # Group riêng cho Egg — dùng để kiểm tra va chạm trứng-player
+        self.eggs        = pygame.sprite.Group()
+
+        # --- Trạng thái game ---
+        self.score      = 0       # Điểm số hiện tại
+        self.wave       = 1       # Wave (sóng) hiện tại
+        self.running    = True    # Game đang chạy?
+        self.game_over  = False   # Trạng thái Game Over
+        self.victory    = False   # Trạng thái chiến thắng
+
+        # --- Khởi tạo Player ---
+        self.player = Player()
+        self.all_sprites.add(self.player)
+
+        # --- Khởi tạo đội hình gà ---
+        self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs)
+
+    # -------------------------------------------------------------------------
+    # VÒNG LẶP CHÍNH
+    # -------------------------------------------------------------------------
+
+    def run(self):
+        """
+        Vòng lặp chính của game (Game Loop).
+        Chạy liên tục cho đến khi self.running = False.
+
+        Thứ tự mỗi frame:
+            1. Xử lý sự kiện (events)
+            2. Cập nhật logic (update)
+            3. Vẽ lên màn hình (draw)
+            4. Giới hạn FPS
+        """
+        while self.running:
+            self._handle_events()
+
+            if not self.game_over and not self.victory:
+                self._update()
+
+            self._draw()
+            self.clock.tick(FPS)  # Giới hạn tốc độ khung hình
+
+        pygame.quit()
+        sys.exit()
+
+    # -------------------------------------------------------------------------
+    # XỬ LÝ SỰ KIỆN
+    # -------------------------------------------------------------------------
+
+    def _handle_events(self):
+        """
+        (Private) Đọc và xử lý tất cả sự kiện từ hệ thống:
+        - Đóng cửa sổ → thoát game.
+        - Nhấn ESC → thoát game.
+        - Nhấn R khi Game Over / Win → chơi lại.
+        """
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+
+            if event.type == pygame.KEYDOWN:
+                # Thoát game bằng phím ESC
+                if event.key == pygame.K_ESCAPE:
+                    self.running = False
+
+                # Chơi lại khi Game Over hoặc thắng
+                if event.key == pygame.K_r and (self.game_over or self.victory):
+                    self._restart()
+
+    # -------------------------------------------------------------------------
+    # CẬP NHẬT LOGIC
+    # -------------------------------------------------------------------------
+
+    def _update(self):
+        """
+        (Private) Cập nhật toàn bộ trạng thái game mỗi frame:
+        1. Cập nhật Player (di chuyển + bắn đạn).
+        2. Cập nhật tất cả Sprite khác (đạn bay, gà...).
+        3. Di chuyển đội hình gà.
+        4. Xử lý va chạm.
+        5. Kiểm tra điều kiện thắng/thua và chuyển wave.
+        """
+        # Cập nhật Player: di chuyển
+        self.player.update()
+
+        # Xử lý bắn đạn (tách riêng để truyền Group vào)
+        self.player.handle_shoot(self.all_sprites, self.bullets)
+
+        # Cập nhật tất cả sprite còn lại (đạn bay lên, gà animation...)
+        # Dùng vòng lặp riêng để không gọi player.update() 2 lần
+        for sprite in self.all_sprites:
+            if sprite is not self.player:
+                sprite.update()
+
+        # Di chuyển đội hình gà và kiểm tra gà chạm đáy
+        fleet_reached_bottom = self.fleet.update()
+        if fleet_reached_bottom:
+            self.game_over = True
+            return  # Dừng update ngay lập tức
+
+        # Xử lý va chạm đạn - gà
+        self._handle_bullet_enemy_collision()
+
+        # Xử lý va chạm gà - player
+        self._handle_enemy_player_collision()
+
+        # Xử lý va chạm trứng - player
+        self._handle_egg_player_collision()
+
+        # Kiểm tra điều kiện chuyển wave / chiến thắng
+        self._check_wave_progression()
+
+    # -------------------------------------------------------------------------
+    # XỬ LÝ VA CHẠM
+    # -------------------------------------------------------------------------
+
+    def _handle_bullet_enemy_collision(self):
+        """
+        (Private) Kiểm tra va chạm giữa đạn và gà.
+
+        Sử dụng groupcollide() của Pygame:
+        - Tham số True, True → Tự động xóa cả đạn lẫn gà khi va chạm.
+        - Mỗi cặp va chạm tính SCORE_PER_KILL điểm.
+        """
+        # hits là dict: {bullet: [danh sách enemy va chạm]}
+        hits = pygame.sprite.groupcollide(
+            self.bullets,  # Group 1: Đạn
+            self.enemies,  # Group 2: Gà
+            True,          # Xóa đạn sau va chạm
+            True           # Xóa gà sau va chạm
+        )
+
+        # Cộng điểm cho mỗi gà bị tiêu diệt
+        for bullet, killed_enemies in hits.items():
+            self.score += SCORE_PER_KILL * len(killed_enemies)
+
+    def _handle_enemy_player_collision(self):
+        """
+        (Private) Kiểm tra va chạm giữa đội hình gà và Player.
+
+        Nếu bất kỳ con gà nào chạm vào Player → Game Over ngay lập tức.
+        Sử dụng spritecollide() với dokill=False để chỉ phát hiện, không tự xóa.
+        """
+        collisions = pygame.sprite.spritecollide(
+            self.player,   # Sprite cần kiểm tra
+            self.enemies,  # Group để kiểm tra chồng lên
+            False          # Không xóa tự động — để hiển thị Game Over trước
+        )
+
+        if collisions:
+            self.game_over = True
+
+    def _handle_egg_player_collision(self):
+        """
+        (Private) Kiểm tra va chạm giữa trứng và Player.
+
+        Nếu bất kỳ quả trứng nào chạm vào Player → Game Over ngay lập tức.
+        Sử dụng spritecollide() với dokill=False để chỉ phát hiện, không tự xóa.
+        """
+        collisions = pygame.sprite.spritecollide(
+            self.player,  # Sprite cần kiểm tra
+            self.eggs,    # Group để kiểm tra chồng lên
+            False         # Không xóa tự động — để hiển thị Game Over trước
+        )
+
+        if collisions:
+            self.game_over = True
+
+    # -------------------------------------------------------------------------
+    # QUẢN LÝ WAVE / TIẾN TRÌNH GAME
+    # -------------------------------------------------------------------------
+
+    def _check_wave_progression(self):
+        """
+        (Private) Kiểm tra xem đội hình gà đã bị tiêu diệt hết chưa.
+        - Nếu hết gà VÀ chưa đến wave cuối → chuyển sang wave mới.
+        - Nếu đã qua wave cuối → chiến thắng.
+        """
+        if not self.fleet.is_empty():
+            return  # Còn gà → chưa cần xét
+
+        if self.wave >= MAX_WAVES:
+            # Đã vượt qua tất cả wave → CHIẾN THẮNG
+            self.victory = True
+        else:
+            # Chuyển sang wave tiếp theo
+            self._start_next_wave()
+
+    def _start_next_wave(self):
+        """
+        (Private) Chuyển sang wave mới:
+        1. Tăng số wave.
+        2. Xóa toàn bộ đạn còn trên màn hình (dọn dẹp).
+        3. Reset đội hình gà với tốc độ cao hơn.
+        """
+        self.wave += 1
+
+        # Xóa hết đạn còn lại trên màn hình
+        self.bullets.empty()
+        # Xóa hết trứng còn lại
+        self.eggs.empty()
+
+        # Tăng tốc và tạo lại đội hình mới
+        self.fleet.increase_speed()
+        self.fleet.reset()
+
+    # -------------------------------------------------------------------------
+    # KHỞI ĐỘNG LẠI GAME
+    # -------------------------------------------------------------------------
+
+    def _restart(self):
+        """
+        (Private) Reset toàn bộ trạng thái về ban đầu để chơi lại.
+        Được gọi khi người chơi nhấn R sau Game Over hoặc chiến thắng.
+        """
+        # Reset trạng thái
+        self.score     = 0
+        self.wave      = 1
+        self.game_over = False
+        self.victory   = False
+
+        # Xóa sạch tất cả sprite
+        self.all_sprites.empty()
+        self.enemies.empty()
+        self.bullets.empty()
+        self.eggs.empty()
+
+        # Tạo lại Player
+        self.player = Player()
+        self.all_sprites.add(self.player)
+
+        # Tạo lại đội hình gà với tốc độ mặc định
+        self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs)
+        self.fleet.speed_x = ENEMY_SPEED_X
+
+    # -------------------------------------------------------------------------
+    # RENDER / VẼ LÊN MÀN HÌNH
+    # -------------------------------------------------------------------------
+
+    def _draw(self):
+        """
+        (Private) Vẽ toàn bộ frame hiện tại lên màn hình.
+        Thứ tự vẽ (painter's algorithm — vẽ đè từ dưới lên):
+            1. Nền đen (xóa frame cũ)
+            2. Vẽ starfield (sao nền)
+            3. Vẽ tất cả sprite
+            4. Vẽ HUD (điểm số, wave)
+            5. Vẽ màn hình Game Over / Win nếu cần
+            6. Flip buffer → hiển thị
+        """
+        # 1. Xóa màn hình bằng màu nền
+        self.screen.fill(COLOR_BLACK)
+
+        # 2. Vẽ nền sao giả (đơn giản)
+        self._draw_starfield()
+
+        # 3. Vẽ tất cả sprite (player, enemies, bullets)
+        self.all_sprites.draw(self.screen)
+
+        # 4. Vẽ HUD
+        self._draw_hud()
+
+        # 5. Vẽ màn Game Over hoặc Win nếu cần
+        if self.game_over:
+            self._draw_game_over_screen()
+        elif self.victory:
+            self._draw_victory_screen()
+
+        # 6. Cập nhật toàn bộ màn hình (double buffering)
+        pygame.display.flip()
+
+    def _draw_starfield(self):
+        """
+        (Private) Vẽ các chấm trắng nhỏ giả lập nền sao vũ trụ.
+        Dùng seed cố định để các ngôi sao không nhảy lung tung mỗi frame.
+        """
+        import random
+        rng = random.Random(42)  # Seed cố định → cùng vị trí mỗi frame
+        for _ in range(80):
+            x = rng.randint(0, SCREEN_WIDTH)
+            y = rng.randint(0, SCREEN_HEIGHT)
+            brightness = rng.randint(80, 200)
+            pygame.draw.circle(self.screen, (brightness, brightness, brightness), (x, y), 1)
+
+    def _draw_hud(self):
+        """
+        (Private) Vẽ giao diện thông tin (HUD) lên góc màn hình:
+        - Góc trên trái: Điểm số.
+        - Góc trên phải: Số Wave hiện tại.
+        - Cạnh dưới: Đường kẻ phân cách vùng Player.
+        """
+        # Điểm số (góc trên trái)
+        score_text = self.font_medium.render(f"SCORE: {self.score}", True, COLOR_WHITE)
+        self.screen.blit(score_text, (15, 10))
+
+        # Wave (góc trên phải)
+        wave_text = self.font_medium.render(f"WAVE: {self.wave}/{MAX_WAVES}", True, COLOR_ORANGE)
+        self.screen.blit(wave_text, (SCREEN_WIDTH - 160, 10))
+
+        # Đường kẻ ngang ở đáy phân cách vùng an toàn Player
+        pygame.draw.line(
+            self.screen, (40, 40, 60),
+            (0, SCREEN_HEIGHT - 60),
+            (SCREEN_WIDTH, SCREEN_HEIGHT - 60),
+            1
+        )
+
+    def _draw_game_over_screen(self):
+        """
+        (Private) Vẽ màn hình Game Over bán trong suốt với điểm số cuối.
+        """
+        # Lớp phủ bán trong suốt màu đen đỏ
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        self.screen.blit(overlay, (0, 0))
+
+        # Chữ GAME OVER
+        go_text = self.font_large.render("GAME OVER", True, COLOR_RED)
+        self.screen.blit(go_text, (
+            SCREEN_WIDTH // 2 - go_text.get_width() // 2,
+            SCREEN_HEIGHT // 2 - 60
+        ))
+
+        # Điểm số cuối
+        score_text = self.font_medium.render(f"Final Score: {self.score}", True, COLOR_WHITE)
+        self.screen.blit(score_text, (
+            SCREEN_WIDTH // 2 - score_text.get_width() // 2,
+            SCREEN_HEIGHT // 2
+        ))
+
+        # Hướng dẫn chơi lại
+        restart_text = self.font_small.render("Nhấn [R] để chơi lại  |  [ESC] để thoát", True, COLOR_ORANGE)
+        self.screen.blit(restart_text, (
+            SCREEN_WIDTH // 2 - restart_text.get_width() // 2,
+            SCREEN_HEIGHT // 2 + 50
+        ))
+
+    def _draw_victory_screen(self):
+        """
+        (Private) Vẽ màn hình chiến thắng khi người chơi qua hết tất cả wave.
+        """
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 160))
+        self.screen.blit(overlay, (0, 0))
+
+        # Chữ CHIẾN THẮNG
+        win_text = self.font_large.render("CHIEN THANG!", True, COLOR_GREEN)
+        self.screen.blit(win_text, (
+            SCREEN_WIDTH // 2 - win_text.get_width() // 2,
+            SCREEN_HEIGHT // 2 - 60
+        ))
+
+        # Điểm số
+        score_text = self.font_medium.render(f"Total Score: {self.score}", True, COLOR_WHITE)
+        self.screen.blit(score_text, (
+            SCREEN_WIDTH // 2 - score_text.get_width() // 2,
+            SCREEN_HEIGHT // 2
+        ))
+
+        # Hướng dẫn
+        restart_text = self.font_small.render("Nhấn [R] để chơi lại  |  [ESC] để thoát", True, COLOR_ORANGE)
+        self.screen.blit(restart_text, (
+            SCREEN_WIDTH // 2 - restart_text.get_width() // 2,
+            SCREEN_HEIGHT // 2 + 50
+        ))
