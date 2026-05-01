@@ -7,8 +7,8 @@
 # =============================================================================
 
 # --- CẤU HÌNH MÀN HÌNH ---
-SCREEN_WIDTH  = 800   # Chiều rộng cửa sổ game (pixel)
-SCREEN_HEIGHT = 600   # Chiều cao cửa sổ game (pixel)
+SCREEN_WIDTH  = 900   # Chiều rộng cửa sổ game (pixel)
+SCREEN_HEIGHT = 700   # Chiều cao cửa sổ game (pixel)
 TITLE         = "Chicken Invaders - Team Project"  # Tiêu đề cửa sổ
 FPS           = 60    # Số khung hình mỗi giây (Frames Per Second)
 
@@ -29,8 +29,9 @@ COLOR_LIGHT_BLUE = (173, 216, 230)  # Màu viền Power-up
 COLOR_GREY       = (80,  80,  80)   # Màu bùa hại (Cursed)
 
 # --- CẤU HÌNH PLAYER (Máy bay người chơi) ---
-PLAYER_WIDTH      = 50    # Chiều rộng sprite Player (pixel)
-PLAYER_HEIGHT     = 40    # Chiều cao sprite Player (pixel)
+PLAYER_WIDTH      = 50    # Chiều rộng frame gốc
+PLAYER_HEIGHT     = 40    # Chiều cao frame gốc
+PLAYER_SCALE      = 1.5   # Hệ số phóng to Player (Chỉnh cái này để máy bay to lên)
 PLAYER_SPEED      = 6     # Tốc độ di chuyển ngang (pixel/frame)
 PLAYER_START_X    = SCREEN_WIDTH // 2   # Vị trí X xuất phát (giữa màn hình)
 PLAYER_START_Y    = SCREEN_HEIGHT - 70  # Vị trí Y xuất phát (gần đáy màn hình)
@@ -64,10 +65,22 @@ POWERUP_TYPES = {        # Các loại power-up và màu sắc tương ứng
 }
 
 # --- CẤU HÌNH ENEMY (Đàn gà) ---
-ENEMY_WIDTH   = 40    # Chiều rộng sprite Enemy (pixel)
-ENEMY_HEIGHT  = 40    # Chiều cao sprite Enemy (pixel)
+ENEMY_WIDTH   = 80    # Chiều rộng sprite Enemy (pixel)
+ENEMY_HEIGHT  = 80    # Chiều cao sprite Enemy (pixel)
+BOSS_WIDTH    = 100   # Chiều rộng khung hình trong sheet
+BOSS_HEIGHT   = 100   # Chiều cao khung hình trong sheet
+BOSS_SCALE    = 2.5   # Hệ số phóng to Boss (Chỉnh cái này để Boss to lên)
 ENEMY_SPEED_X = 1.5   # Tốc độ di chuyển ngang ban đầu (pixel/frame)
 ENEMY_DROP_Y  = 20    # Khoảng cách hạ xuống khi chạm biên (pixel)
+
+# 4 loại gà con theo máu + 1 boss
+ENEMY_HP_BY_TYPE = {
+    "chick_1": 1,
+    "chick_2": 2,
+    "chick_3": 3,
+    "chick_4": 4,
+    "boss": 20,
+}
 
 # --- CẤU HÌNH ĐỘI HÌNH GÀ (Grid Formation) ---
 ENEMY_ROWS      = 3   # Số hàng gà
