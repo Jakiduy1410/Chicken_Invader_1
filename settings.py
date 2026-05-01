@@ -7,8 +7,8 @@
 # =============================================================================
 
 # --- CẤU HÌNH MÀN HÌNH ---
-SCREEN_WIDTH  = 800   # Chiều rộng cửa sổ game (pixel)
-SCREEN_HEIGHT = 600   # Chiều cao cửa sổ game (pixel)
+SCREEN_WIDTH  = 900   # Chiều rộng cửa sổ game (pixel)
+SCREEN_HEIGHT = 700   # Chiều cao cửa sổ game (pixel)
 TITLE         = "Chicken Invaders - Team Project"  # Tiêu đề cửa sổ
 FPS           = 60    # Số khung hình mỗi giây (Frames Per Second)
 
@@ -43,10 +43,22 @@ EGG_SPEED  = 5     # Tốc độ trứng bay xuống (pixel/frame)
 EGG_DROP_COUNT = 6 # Số lượng trứng thả mỗi lượt (khoảng 6 con)
 
 # --- CẤU HÌNH ENEMY (Đàn gà) ---
-ENEMY_WIDTH   = 40    # Chiều rộng sprite Enemy (pixel)
-ENEMY_HEIGHT  = 40    # Chiều cao sprite Enemy (pixel)
+ENEMY_WIDTH   = 80    # Chiều rộng sprite Enemy (pixel)
+ENEMY_HEIGHT  = 80    # Chiều cao sprite Enemy (pixel)
+BOSS_WIDTH    = 100   # Chiều rộng khung hình trong sheet
+BOSS_HEIGHT   = 100   # Chiều cao khung hình trong sheet
+BOSS_SCALE    = 2.5   # Hệ số phóng to Boss (Chỉnh cái này để Boss to lên)
 ENEMY_SPEED_X = 1.5   # Tốc độ di chuyển ngang ban đầu (pixel/frame)
 ENEMY_DROP_Y  = 20    # Khoảng cách hạ xuống khi chạm biên (pixel)
+
+# 4 loại gà con theo máu + 1 boss
+ENEMY_HP_BY_TYPE = {
+    "chick_1": 1,
+    "chick_2": 2,
+    "chick_3": 3,
+    "chick_4": 4,
+    "boss": 20,
+}
 
 # --- CẤU HÌNH ĐỘI HÌNH GÀ (Grid Formation) ---
 ENEMY_ROWS      = 3   # Số hàng gà

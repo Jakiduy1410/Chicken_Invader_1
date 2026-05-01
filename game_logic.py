@@ -21,8 +21,7 @@ from sprites import Player, Enemy, Bullet, Egg
 #         Điều phối chuyển động đồng bộ: ngang → chạm biên → hạ xuống → đổi chiều.
 # =============================================================================
 class EnemyFleet:
-
-    def __init__(self, all_sprites_group, enemies_group, eggs_group):
+    def __init__(self, all_sprites_group, enemies_group, eggs_group, wave=1):
         """
         Khởi tạo đội hình gà dạng lưới (rows × cols).
 
@@ -43,30 +42,57 @@ class EnemyFleet:
         self.speed_x = ENEMY_SPEED_X
 
         # Tạo đội hình lần đầu
+        self.wave = wave
         self._spawn_fleet()
 
     def _spawn_fleet(self):
         """
         (Private) Sinh toàn bộ đội hình gà theo dạng lưới.
-        Được gọi khi bắt đầu game hoặc bắt đầu wave mới.
-
-        Logic tính vị trí:
-            - Lấy khoảng không gian ngang tổng thể rồi căn giữa màn hình.
-            - Mỗi con gà cách nhau ENEMY_H_SPACING / ENEMY_V_SPACING pixel.
+        Boss ở trên cùng, các hàng gà con ở phía dưới.
         """
-        # Tính tổng chiều rộng của lưới để căn giữa màn hình
+        # 1. Tính toán không gian cho Boss (nếu là wave cuối)
+        boss_render_h = int(BOSS_HEIGHT * BOSS_SCALE)
+        
+        if self.wave == MAX_WAVES:
+            # Nếu có Boss, bắt đầu đội hình rất cao để Boss bị khuất phần lớn phía trên
+            # Nó sẽ dần hiện ra khi cả đội hình di chuyển và hạ thấp xuống (drop)
+            current_grid_top = -100 
+            boss_offset_y = boss_render_h + 20
+        else:
+            current_grid_top = ENEMY_GRID_TOP
+            boss_offset_y = 0
+
+        # 2. Tính tổng chiều rộng của lưới để căn giữa màn hình
         total_grid_width  = (ENEMY_COLS - 1) * ENEMY_H_SPACING
         start_x = (SCREEN_WIDTH - total_grid_width) // 2  # X của cột đầu tiên
 
+        # 3. Tạo đội hình gà con
         for row in range(ENEMY_ROWS):
             for col in range(ENEMY_COLS):
-                # Tính tọa độ tâm của từng con gà
                 x = start_x + col * ENEMY_H_SPACING
-                y = ENEMY_GRID_TOP + row * ENEMY_V_SPACING
+                y = current_grid_top + boss_offset_y + row * ENEMY_V_SPACING
 
-                enemy = Enemy(x, y)
+                type_cycle = ["chick_1", "chick_2", "chick_3", "chick_4"]
+                enemy_type = type_cycle[(row + col) % len(type_cycle)]
+                hp = ENEMY_HP_BY_TYPE[enemy_type]
+                enemy = Enemy(x, y, enemy_type=enemy_type, hp=hp)
                 self.all_sprites.add(enemy)
                 self.enemies.add(enemy)
+
+        # 4. Thêm 1 gà boss ở wave cuối tại vị trí TRÊN CÙNG
+        if self.wave == MAX_WAVES:
+            # Boss ở trên cùng của đội hình
+            target_boss_y = current_grid_top + (boss_render_h // 2)
+            
+            boss = Enemy(
+                SCREEN_WIDTH // 2,
+                target_boss_y,
+                enemy_type="boss",
+                hp=ENEMY_HP_BY_TYPE["boss"]
+            )
+            
+            self.all_sprites.add(boss)
+            self.enemies.add(boss)
 
     def update(self):
         """
@@ -117,6 +143,10 @@ class EnemyFleet:
             # Hạ thấp xuống theo ENEMY_DROP_Y
             enemy.rect.y += ENEMY_DROP_Y
 
+            # Nếu enemy là Boss (có target_y), cập nhật target_y để bay xuống đúng vị trí mới của đội hình
+            if hasattr(enemy, "target_y"):
+                enemy.target_y += ENEMY_DROP_Y
+
             # Đẩy gà vào trong màn hình nếu vẫn đang tràn ra ngoài
             if enemy.rect.right > SCREEN_WIDTH:
                 enemy.rect.right = SCREEN_WIDTH
@@ -143,6 +173,7 @@ class EnemyFleet:
             increment (float): Lượng tăng thêm (mặc định lấy từ settings.py).
         """
         self.speed_x += increment
+        self.wave += 1
 
     def is_empty(self):
         """
@@ -212,7 +243,7 @@ class Game:
 
         # --- Trạng thái game ---
         self.score      = 0       # Điểm số hiện tại
-        self.wave       = 1       # Wave (sóng) hiện tại
+        self.wave       = MAX_WAVES  # Bắt đầu ngay tại màn Boss để test
         self.running    = True    # Game đang chạy?
         self.game_over  = False   # Trạng thái Game Over
         self.victory    = False   # Trạng thái chiến thắng
@@ -222,7 +253,7 @@ class Game:
         self.all_sprites.add(self.player)
 
         # --- Khởi tạo đội hình gà ---
-        self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs)
+        self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs, self.wave)
 
     # -------------------------------------------------------------------------
     # VÒNG LẶP CHÍNH
@@ -335,12 +366,15 @@ class Game:
             self.bullets,  # Group 1: Đạn
             self.enemies,  # Group 2: Gà
             True,          # Xóa đạn sau va chạm
-            True           # Xóa gà sau va chạm
+            False          # Không xóa gà ngay, cần trừ máu
         )
 
-        # Cộng điểm cho mỗi gà bị tiêu diệt
-        for bullet, killed_enemies in hits.items():
-            self.score += SCORE_PER_KILL * len(killed_enemies)
+        # Trừ máu từng enemy; chỉ cộng điểm khi enemy chết.
+        for _, hit_enemies in hits.items():
+            for enemy in hit_enemies:
+                if enemy.take_damage(1):
+                    score_multiplier = enemy.max_hp
+                    self.score += SCORE_PER_KILL * score_multiplier
 
     def _handle_enemy_player_collision(self):
         """
@@ -505,6 +539,11 @@ class Game:
         wave_text = self.font_medium.render(f"WAVE: {self.wave}/{MAX_WAVES}", True, COLOR_ORANGE)
         self.screen.blit(wave_text, (SCREEN_WIDTH - 160, 10))
 
+        # Thanh máu boss: chỉ hiển thị khi boss còn sống trên màn hình.
+        boss = self._get_alive_boss()
+        if boss is not None:
+            self._draw_boss_hp_bar(boss)
+
         # Đường kẻ ngang ở đáy phân cách vùng an toàn Player
         pygame.draw.line(
             self.screen, (40, 40, 60),
@@ -512,6 +551,36 @@ class Game:
             (SCREEN_WIDTH, SCREEN_HEIGHT - 60),
             1
         )
+
+    def _get_alive_boss(self):
+        """
+        (Private) Trả về enemy boss còn sống, hoặc None nếu không có.
+        """
+        for enemy in self.enemies:
+            if getattr(enemy, "enemy_type", "") == "boss":
+                return enemy
+        return None
+
+    def _draw_boss_hp_bar(self, boss):
+        """
+        (Private) Vẽ thanh máu của boss ở phía trên màn hình.
+        """
+        bar_width = 320
+        bar_height = 16
+        x = (SCREEN_WIDTH - bar_width) // 2
+        y = 46
+
+        # Viền + nền thanh máu
+        pygame.draw.rect(self.screen, COLOR_WHITE, (x - 2, y - 2, bar_width + 4, bar_height + 4), 1)
+        pygame.draw.rect(self.screen, (45, 45, 60), (x, y, bar_width, bar_height))
+
+        hp_ratio = max(0.0, min(1.0, boss.hp / max(1, boss.max_hp)))
+        fill_width = int(bar_width * hp_ratio)
+        fill_color = (220, 60, 60) if hp_ratio < 0.35 else (255, 170, 40)
+        pygame.draw.rect(self.screen, fill_color, (x, y, fill_width, bar_height))
+
+        boss_text = self.font_small.render(f"BOSS HP: {boss.hp}/{boss.max_hp}", True, COLOR_WHITE)
+        self.screen.blit(boss_text, (x + (bar_width - boss_text.get_width()) // 2, y - 22))
 
     def _draw_game_over_screen(self):
         """
