@@ -157,8 +157,16 @@ class Player(pygame.sprite.Sprite):
             frame_width=PLAYER_WIDTH,
             frame_height=PLAYER_HEIGHT,
             frame_count=3,
-            row=0
-        ) or _build_player_fallback_frames()
+            row=0,
+            scale=PLAYER_SCALE
+        )
+        if not self.frames:
+            # Fallback nếu không có ảnh: vẽ bằng code và scale lên
+            self.frames = _build_player_fallback_frames()
+            if PLAYER_SCALE != 1.0:
+                new_w = int(PLAYER_WIDTH * PLAYER_SCALE)
+                new_h = int(PLAYER_HEIGHT * PLAYER_SCALE)
+                self.frames = [pygame.transform.scale(f, (new_w, new_h)) for f in self.frames]
         self.frame_index = 0
         self.image = self.frames[self.frame_index]
         self.animation_interval = 90  # ms/frame
