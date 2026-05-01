@@ -11,8 +11,9 @@
 
 import pygame
 import sys
+import random
 from settings import *
-from sprites import Player, Enemy, Bullet, Egg
+from sprites import Player, Enemy, Bullet, Egg, PowerUp
 
 
 # =============================================================================
@@ -154,7 +155,6 @@ class EnemyFleet:
                 enemy.rect.left = 0
 
         # Thả trứng: chọn ngẫu nhiên EGG_DROP_COUNT gà để thả trứng
-        import random
         if len(self.enemies) >= EGG_DROP_COUNT:
             droppers = random.sample(list(self.enemies), EGG_DROP_COUNT)
         else:
@@ -240,6 +240,8 @@ class Game:
         self.bullets     = pygame.sprite.Group()
         # Group riêng cho Egg — dùng để kiểm tra va chạm trứng-player
         self.eggs        = pygame.sprite.Group()
+        # Group riêng cho PowerUp — dùng để kiểm tra va chạm vật phẩm-player
+        self.powerups    = pygame.sprite.Group()
 
         # --- Trạng thái game ---
         self.score      = 0       # Điểm số hiện tại
@@ -346,6 +348,9 @@ class Game:
         # Xử lý va chạm trứng - player
         self._handle_egg_player_collision()
 
+        # Xử lý va chạm vật phẩm - player
+        self._handle_powerup_collision()
+
         # Kiểm tra điều kiện chuyển wave / chiến thắng
         self._check_wave_progression()
 
@@ -375,6 +380,13 @@ class Game:
                 if enemy.take_damage(1):
                     score_multiplier = enemy.max_hp
                     self.score += SCORE_PER_KILL * score_multiplier
+
+                    # --- Logic rơi PowerUp ---
+                    if random.random() < POWERUP_DROP_RATE:
+                        p_type = random.choice(list(POWERUP_TYPES.keys()))
+                        p = PowerUp(enemy.rect.centerx, enemy.rect.centery, p_type)
+                        self.all_sprites.add(p)
+                        self.powerups.add(p)
 
     def _handle_enemy_player_collision(self):
         """
@@ -407,6 +419,22 @@ class Game:
 
         if collisions:
             self.game_over = True
+
+    def _handle_powerup_collision(self):
+        """
+        (Private) Kiểm tra va chạm giữa Player và vật phẩm tăng sức mạnh.
+        """
+        hits = pygame.sprite.spritecollide(
+            self.player,
+            self.powerups,
+            True  # Xóa vật phẩm sau khi ăn
+        )
+
+        for p in hits:
+            # Áp dụng buff cho Player
+            self.player.apply_powerup(p.type)
+            # Có thể cộng thêm một ít điểm khi ăn item
+            self.score += 50
 
     # -------------------------------------------------------------------------
     # QUẢN LÝ WAVE / TIẾN TRÌNH GAME
@@ -441,6 +469,8 @@ class Game:
         self.bullets.empty()
         # Xóa hết trứng còn lại
         self.eggs.empty()
+        # Xóa hết vật phẩm còn lại
+        self.powerups.empty()
 
         # Tăng tốc và tạo lại đội hình mới
         self.fleet.increase_speed()
@@ -466,6 +496,7 @@ class Game:
         self.enemies.empty()
         self.bullets.empty()
         self.eggs.empty()
+        self.powerups.empty()
 
         # Tạo lại Player
         self.player = Player()
@@ -516,7 +547,6 @@ class Game:
         (Private) Vẽ các chấm trắng nhỏ giả lập nền sao vũ trụ.
         Dùng seed cố định để các ngôi sao không nhảy lung tung mỗi frame.
         """
-        import random
         rng = random.Random(42)  # Seed cố định → cùng vị trí mỗi frame
         for _ in range(80):
             x = rng.randint(0, SCREEN_WIDTH)
