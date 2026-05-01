@@ -11,7 +11,128 @@
 # =============================================================================
 
 import pygame
+from pathlib import Path
 from settings import *
+
+ASSETS_IMAGES_DIR = Path(__file__).resolve().parent / "assets" / "image"
+
+
+def _load_sprite_sheet_frames(sheet_name, frame_width, frame_height, frame_count, row=0, scale=1.0):
+    """
+    Cắt frame từ sprite sheet theo hàng và có thể phóng to/thu nhỏ.
+    """
+    sheet_path = ASSETS_IMAGES_DIR / sheet_name
+    if not sheet_path.exists():
+        return []
+
+    try:
+        sheet = pygame.image.load(str(sheet_path)).convert_alpha()
+    except pygame.error:
+        return []
+
+    frames = []
+    for i in range(frame_count):
+        # Tạo surface gốc cho 1 frame
+        frame = pygame.Surface((frame_width, frame_height), pygame.SRCALPHA)
+        frame.blit(sheet, (0, 0), (i * frame_width, row * frame_height, frame_width, frame_height))
+        
+        # Nếu có scale, phóng to frame này lên
+        if scale != 1.0:
+            new_w = int(frame_width * scale)
+            new_h = int(frame_height * scale)
+            frame = pygame.transform.scale(frame, (new_w, new_h))
+            
+        frames.append(frame)
+    return frames
+
+
+def _build_player_fallback_frames():
+    """
+    Tạo 3 frame máy bay giả lập hiệu ứng xịt lửa.
+    """
+    flame_lengths = [8, 14, 10]
+    frames = []
+    for flame_len in flame_lengths:
+        frame = pygame.Surface((PLAYER_WIDTH, PLAYER_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.rect(frame, COLOR_GREEN, (8, 15, PLAYER_WIDTH - 16, 22), border_radius=4)
+        pygame.draw.polygon(frame, COLOR_GREEN, [
+            (PLAYER_WIDTH // 2, 0),
+            (10, 22),
+            (PLAYER_WIDTH - 10, 22)
+        ])
+        pygame.draw.polygon(frame, COLOR_DARK_GREEN, [
+            (PLAYER_WIDTH // 2, 0),
+            (10, 22),
+            (PLAYER_WIDTH - 10, 22)
+        ], 2)
+        pygame.draw.circle(frame, COLOR_WHITE, (PLAYER_WIDTH // 2, 18), 6)
+        # Flame động ở phía đuôi: chỉ đổi phần hiển thị, không ảnh hưởng rect.
+        pygame.draw.polygon(frame, COLOR_ORANGE, [
+            (PLAYER_WIDTH // 2 - 6, PLAYER_HEIGHT - 2),
+            (PLAYER_WIDTH // 2 + 6, PLAYER_HEIGHT - 2),
+            (PLAYER_WIDTH // 2, PLAYER_HEIGHT + flame_len - 2)
+        ])
+        frames.append(frame)
+    return frames
+
+
+def _build_enemy_fallback_frames(enemy_type="chick_1", width=ENEMY_WIDTH, height=ENEMY_HEIGHT):
+    """
+    Tạo 3 frame gà giả lập hiệu ứng vỗ cánh.
+    """
+    body_color_map = {
+        "chick_1": (220, 200, 40),
+        "chick_2": (255, 160, 40),
+        "chick_3": (220, 70, 60),
+        "chick_4": (170, 50, 140),
+        "boss": (120, 120, 255),
+    }
+    border_color_map = {
+        "chick_1": (160, 140, 20),
+        "chick_2": (170, 90, 20),
+        "chick_3": (130, 30, 30),
+        "chick_4": (110, 25, 90),
+        "boss": (60, 60, 200),
+    }
+    body_color = body_color_map.get(enemy_type, COLOR_RED)
+    border_color = border_color_map.get(enemy_type, COLOR_DARK_RED)
+
+    wing_offsets = [0, -3, 2]
+    frames = []
+    for wing_offset in wing_offsets:
+        frame = pygame.Surface((width, height), pygame.SRCALPHA)
+
+        pygame.draw.ellipse(frame, body_color,
+                            (2, 8, width - 4, height - 10))
+        pygame.draw.circle(frame, body_color,
+                           (width // 2, 8), 10)
+        pygame.draw.circle(frame, COLOR_WHITE,
+                           (width // 2 - 3, 6), 3)
+        pygame.draw.circle(frame, COLOR_WHITE,
+                           (width // 2 + 3, 6), 3)
+        pygame.draw.circle(frame, COLOR_BLACK,
+                           (width // 2 - 3, 6), 1)
+        pygame.draw.circle(frame, COLOR_BLACK,
+                           (width // 2 + 3, 6), 1)
+        pygame.draw.polygon(frame, COLOR_ORANGE, [
+            (width // 2, 12),
+            (width // 2 - 4, 16),
+            (width // 2 + 4, 16)
+        ])
+        pygame.draw.ellipse(frame, border_color,
+                            (2, 8, width - 4, height - 10), 2)
+
+        # 2 cánh vỗ lên/xuống theo frame.
+        pygame.draw.ellipse(
+            frame, border_color,
+            (0, 16 + wing_offset, 10, 12)
+        )
+        pygame.draw.ellipse(
+            frame, border_color,
+            (width - 10, 16 + wing_offset, 10, 12)
+        )
+        frames.append(frame)
+    return frames
 
 
 # =============================================================================
@@ -30,24 +151,18 @@ class Player(pygame.sprite.Sprite):
         """
         super().__init__()
 
-        # --- Tạo placeholder Surface hình tam giác (máy bay đơn giản) ---
-        self.image = pygame.Surface((PLAYER_WIDTH, PLAYER_HEIGHT), pygame.SRCALPHA)
-        # Vẽ thân tàu: hình chữ nhật xanh lá
-        pygame.draw.rect(self.image, COLOR_GREEN, (8, 15, PLAYER_WIDTH - 16, 22), border_radius=4)
-        # Vẽ mũi tàu: tam giác nhọn
-        pygame.draw.polygon(self.image, COLOR_GREEN, [
-            (PLAYER_WIDTH // 2, 0),
-            (10, 22),
-            (PLAYER_WIDTH - 10, 22)
-        ])
-        # Vẽ viền ngoài cho dễ nhìn
-        pygame.draw.polygon(self.image, COLOR_DARK_GREEN, [
-            (PLAYER_WIDTH // 2, 0),
-            (10, 22),
-            (PLAYER_WIDTH - 10, 22)
-        ], 2)
-        # Vẽ buồng lái: hình tròn nhỏ ở giữa
-        pygame.draw.circle(self.image, COLOR_WHITE, (PLAYER_WIDTH // 2, 18), 6)
+        # Ưu tiên sprite sheet; nếu chưa có asset thì fallback về frame vẽ tay.
+        self.frames = _load_sprite_sheet_frames(
+            sheet_name="player_sheet.png",
+            frame_width=PLAYER_WIDTH,
+            frame_height=PLAYER_HEIGHT,
+            frame_count=3,
+            row=0
+        ) or _build_player_fallback_frames()
+        self.frame_index = 0
+        self.image = self.frames[self.frame_index]
+        self.animation_interval = 90  # ms/frame
+        self.last_frame_update = pygame.time.get_ticks()
 
         # --- Thiết lập vị trí ban đầu ---
         self.rect = self.image.get_rect()
@@ -82,6 +197,13 @@ class Player(pygame.sprite.Sprite):
         # Không cho Player đi ra ngoài cạnh phải
         if self.rect.right > SCREEN_WIDTH:
             self.rect.right = SCREEN_WIDTH
+
+        # Chỉ đổi frame hiển thị bằng self.image, không đụng rect/di chuyển.
+        now = pygame.time.get_ticks()
+        if now - self.last_frame_update >= self.animation_interval:
+            self.last_frame_update = now
+            self.frame_index = (self.frame_index + 1) % len(self.frames)
+            self.image = self.frames[self.frame_index]
 
     def handle_shoot(self, all_sprites, bullets_group):
         """
@@ -118,7 +240,7 @@ class Player(pygame.sprite.Sprite):
 # =============================================================================
 class Enemy(pygame.sprite.Sprite):
 
-    def __init__(self, x, y):
+    def __init__(self, x, y, enemy_type="chick_1", hp=1):
         """
         Khởi tạo một con gà tại vị trí lưới (x, y).
 
@@ -127,49 +249,60 @@ class Enemy(pygame.sprite.Sprite):
             y (int): Tọa độ Y tâm sprite trên màn hình.
         """
         super().__init__()
+        self.enemy_type = enemy_type
+        self.max_hp = hp
+        self.hp = hp
 
-        # --- Tạo placeholder hình con gà đơn giản ---
-        self.image = pygame.Surface((ENEMY_WIDTH, ENEMY_HEIGHT), pygame.SRCALPHA)
+        # Xác định kích thước và scale dựa trên loại enemy
+        w = BOSS_WIDTH if enemy_type == "boss" else ENEMY_WIDTH
+        h = BOSS_HEIGHT if enemy_type == "boss" else ENEMY_HEIGHT
+        scale = BOSS_SCALE if enemy_type == "boss" else 1.0
 
-        # Thân gà: hình elip đỏ
-        pygame.draw.ellipse(self.image, COLOR_RED,
-                            (2, 8, ENEMY_WIDTH - 4, ENEMY_HEIGHT - 10))
-        # Đầu gà: hình tròn nhỏ hơn ở trên
-        pygame.draw.circle(self.image, COLOR_RED,
-                           (ENEMY_WIDTH // 2, 8), 10)
-        # Mắt gà: chấm trắng nhỏ
-        pygame.draw.circle(self.image, COLOR_WHITE,
-                           (ENEMY_WIDTH // 2 - 3, 6), 3)
-        pygame.draw.circle(self.image, COLOR_WHITE,
-                           (ENEMY_WIDTH // 2 + 3, 6), 3)
-        # Con ngươi: chấm đen
-        pygame.draw.circle(self.image, COLOR_BLACK,
-                           (ENEMY_WIDTH // 2 - 3, 6), 1)
-        pygame.draw.circle(self.image, COLOR_BLACK,
-                           (ENEMY_WIDTH // 2 + 3, 6), 1)
-        # Mỏ gà: tam giác màu cam nhỏ
-        pygame.draw.polygon(self.image, COLOR_ORANGE, [
-            (ENEMY_WIDTH // 2, 12),
-            (ENEMY_WIDTH // 2 - 4, 16),
-            (ENEMY_WIDTH // 2 + 4, 16)
-        ])
-        # Viền ngoài thân
-        pygame.draw.ellipse(self.image, COLOR_DARK_RED,
-                            (2, 8, ENEMY_WIDTH - 4, ENEMY_HEIGHT - 10), 2)
+        self.frames = _load_sprite_sheet_frames(
+            sheet_name=f"{enemy_type}_sheet.png",
+            frame_width=w,
+            frame_height=h,
+            frame_count=3,
+            row=0,
+            scale=scale
+        ) or _build_enemy_fallback_frames(
+            enemy_type=enemy_type, 
+            width=int(w * scale), 
+            height=int(h * scale)
+        )
+        import random
+        self.frame_index = random.randint(0, len(self.frames) - 1)
+        self.image = self.frames[self.frame_index]
+        self.animation_interval = 100 if enemy_type == "boss" else 140  # ms/frame
+        self.last_frame_update = pygame.time.get_ticks()
 
         # --- Thiết lập vị trí ---
         self.rect = self.image.get_rect()
         self.rect.centerx = x
-        self.rect.centery  = y
+        self.rect.centery = y
+        self.target_y = y  # Lưu tọa độ Y mục tiêu (để làm hiệu ứng bay xuống)
 
     def update(self):
         """
         Gọi mỗi frame.
-        Hiện tại Enemy không tự cập nhật — chuyển động ngang/dọc do EnemyFleet
-        trong game_logic.py điều khiển trực tiếp lên rect.
-        Dev có thể thêm animation hoặc AI riêng tại đây sau này.
+        - Xử lý animation frame.
         """
-        pass  # Placeholder — mở rộng sau
+        now = pygame.time.get_ticks()
+        if now - self.last_frame_update >= self.animation_interval:
+            self.last_frame_update = now
+            self.frame_index = (self.frame_index + 1) % len(self.frames)
+            self.image = self.frames[self.frame_index]
+
+    def take_damage(self, amount=1):
+        """
+        Giảm máu Enemy.
+        Trả về True nếu Enemy đã chết.
+        """
+        self.hp -= amount
+        if self.hp <= 0:
+            self.kill()
+            return True
+        return False
 
 
 # =============================================================================
