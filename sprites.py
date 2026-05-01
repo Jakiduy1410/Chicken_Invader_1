@@ -259,6 +259,32 @@ class Player(pygame.sprite.Sprite):
             self.frame_index = (self.frame_index + 1) % len(self.frames)
             self.image = self.frames[self.frame_index]
 
+    def apply_powerup(self, p_type):
+        """
+        Kích hoạt hiệu ứng của vật phẩm tăng sức mạnh.
+        """
+        now = pygame.time.get_ticks()
+        duration = POWERUP_DURATION
+
+        if p_type == "pierce":
+            self.pierce_expire_time = now + duration
+        elif p_type == "triple_shot":
+            self.triple_shot_expire_time = now + duration
+            # Xung đột: triple_shot ghi đè double_shot (tuỳ chọn thiết kế)
+            self.double_shot_expire_time = 0
+        elif p_type == "double_shot":
+            self.double_shot_expire_time = now + duration
+            # Xung đột: double_shot ghi đè triple_shot
+            self.triple_shot_expire_time = 0
+        elif p_type == "rapid_fire":
+            self.rapid_fire_expire_time = now + duration
+        elif p_type == "shield":
+            self.shield_expire_time = now + duration
+            self.has_shield = True
+        elif p_type == "cursed":
+            # Bùa hại: không bắn được trong 3 giây
+            self.cursed_expire_time = now + 3000
+
     def handle_shoot(self, all_sprites, bullets_group):
         """
         Kiểm tra phím Space và tạo viên đạn mới nếu cooldown đã hết.
