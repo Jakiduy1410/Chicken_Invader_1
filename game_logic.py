@@ -56,7 +56,7 @@ class EnemyFleet:
         if self.wave == MAX_WAVES:
             # Nếu có Boss, bắt đầu đội hình rất cao để Boss bị khuất phần lớn phía trên
             # Nó sẽ dần hiện ra khi cả đội hình di chuyển và hạ thấp xuống (drop)
-            current_grid_top = -100 
+            current_grid_top = -150 
             boss_offset_y = boss_render_h + 20
         else:
             current_grid_top = ENEMY_GRID_TOP
@@ -243,7 +243,7 @@ class Game:
 
         # --- Trạng thái game ---
         self.score      = 0       # Điểm số hiện tại
-        self.wave       = MAX_WAVES  # Bắt đầu ngay tại màn Boss để test
+        self.wave       = 1  # Bắt đầu ngay tại màn Boss để test
         self.running    = True    # Game đang chạy?
         self.game_over  = False   # Trạng thái Game Over
         self.victory    = False   # Trạng thái chiến thắng

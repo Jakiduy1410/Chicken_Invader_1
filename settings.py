@@ -24,8 +24,9 @@ COLOR_DARK_RED   = (150, 20,  20)   # Màu viền Enemy
 COLOR_ORANGE     = (255, 140, 0)    # Màu chữ Score / UI
 
 # --- CẤU HÌNH PLAYER (Máy bay người chơi) ---
-PLAYER_WIDTH      = 50    # Chiều rộng sprite Player (pixel)
-PLAYER_HEIGHT     = 40    # Chiều cao sprite Player (pixel)
+PLAYER_WIDTH      = 50    # Chiều rộng frame gốc
+PLAYER_HEIGHT     = 40    # Chiều cao frame gốc
+PLAYER_SCALE      = 1.5   # Hệ số phóng to Player (Chỉnh cái này để máy bay to lên)
 PLAYER_SPEED      = 6     # Tốc độ di chuyển ngang (pixel/frame)
 PLAYER_START_X    = SCREEN_WIDTH // 2   # Vị trí X xuất phát (giữa màn hình)
 PLAYER_START_Y    = SCREEN_HEIGHT - 70  # Vị trí Y xuất phát (gần đáy màn hình)
