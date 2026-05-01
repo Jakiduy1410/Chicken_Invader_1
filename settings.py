@@ -22,6 +22,11 @@ COLOR_YELLOW     = (255, 220, 0)    # Màu Bullet (đạn)
 COLOR_DARK_GREEN = (0,   150, 50)   # Màu viền Player
 COLOR_DARK_RED   = (150, 20,  20)   # Màu viền Enemy
 COLOR_ORANGE     = (255, 140, 0)    # Màu chữ Score / UI
+COLOR_PURPLE     = (128, 0, 128)    # Màu tím
+COLOR_PINK       = (255, 105, 180)  # Màu hồng
+COLOR_BLUE       = (0, 150, 255)  # Màu Power-up
+COLOR_LIGHT_BLUE = (173, 216, 230)  # Màu viền Power-up
+COLOR_GREY       = (80,  80,  80)   # Màu bùa hại (Cursed)
 
 # --- CẤU HÌNH PLAYER (Máy bay người chơi) ---
 PLAYER_WIDTH      = 50    # Chiều rộng frame gốc
@@ -35,13 +40,29 @@ PLAYER_START_Y    = SCREEN_HEIGHT - 70  # Vị trí Y xuất phát (gần đáy 
 BULLET_WIDTH  = 5     # Chiều rộng viên đạn (pixel)
 BULLET_HEIGHT = 14    # Chiều cao viên đạn (pixel)
 BULLET_SPEED  = 10    # Tốc độ đạn bay lên (pixel/frame, giá trị dương = đi lên)
-BULLET_COOLDOWN = 300 # Thời gian hồi chiêu bắn (milliseconds) — tránh spam đạn
+BULLET_COOLDOWN = 300 # Thời gian hồi chiêu bắn mặc định (milliseconds)
+RAPID_FIRE_COOLDOWN = 100 # Thời gian hồi chiêu khi có power-up rapid_fire
 
 # --- CẤU HÌNH EGG (Trứng gà) ---
 EGG_WIDTH  = 12     # Chiều rộng trứng (pixel)
 EGG_HEIGHT = 12    # Chiều cao trứng (pixel)
 EGG_SPEED  = 5     # Tốc độ trứng bay xuống (pixel/frame)
 EGG_DROP_COUNT = 6 # Số lượng trứng thả mỗi lượt (khoảng 6 con)
+
+# --- CẤU HÌNH POWER-UP (Vật phẩm tăng sức mạnh) ---
+POWERUP_WIDTH  = 30    # Chiều rộng vật phẩm (pixel)
+POWERUP_HEIGHT = 30    # Chiều cao vật phẩm (pixel)
+POWERUP_SPEED  = 4     # Tốc độ rơi (pixel/frame)
+POWERUP_DROP_RATE = 0.15 # Tỉ lệ rơi vật phẩm khi gà bị tiêu diệt (15%)
+POWERUP_DURATION = 10000 # Thời gian hiệu lực của Power-up (10 giây)
+POWERUP_TYPES = {        # Các loại power-up và màu sắc tương ứng
+    "pierce":      COLOR_RED,
+    "triple_shot": COLOR_GREEN,
+    "shield":      COLOR_YELLOW,
+    "rapid_fire":  COLOR_PURPLE,
+    "double_shot": COLOR_PINK,
+    "cursed":      COLOR_GREY
+}
 
 # --- CẤU HÌNH ENEMY (Đàn gà) ---
 ENEMY_WIDTH   = 80    # Chiều rộng sprite Enemy (pixel)
