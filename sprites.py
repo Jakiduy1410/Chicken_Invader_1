@@ -172,6 +172,10 @@ class Player(pygame.sprite.Sprite):
         self.image = self.frames[self.frame_index]
         self.animation_interval = 90  # ms/frame
         self.last_frame_update = pygame.time.get_ticks()
+        
+        # Pre-calculate masks for each frame to enable pixel-perfect collision
+        self.masks = [pygame.mask.from_surface(f) for f in self.frames]
+        self.mask = self.masks[self.frame_index]
 
         # --- Thiết lập vị trí ban đầu ---
         self.rect = self.image.get_rect()
@@ -190,7 +194,22 @@ class Player(pygame.sprite.Sprite):
         self.shield_expire_time = 0
         self.cursed_expire_time = 0 # Thời gian kẹt súng
         self.has_shield = False # Chỉ dùng để quyết định có vẽ hiệu ứng khiên hay không
+        
+        # Load shield frames (3 frames as requested)
+        self.shield_frames = _load_sprite_sheet_frames(
+            sheet_name="shield_player.png",
+            frame_width=PLAYER_WIDTH,
+            frame_height=PLAYER_HEIGHT,
+            frame_count=3,
+            row=0,
+            scale=PLAYER_SCALE
+        )
+        self.shield_frame_index = 0
+        self.shield_animation_interval = 100 # ms/frame
+        self.last_shield_update = pygame.time.get_ticks()
+
         self.base_image = self.image.copy()  # Lưu ảnh gốc để vẽ đè hiệu ứng
+
 
     def update(self):
         """
@@ -244,13 +263,16 @@ class Player(pygame.sprite.Sprite):
                 self.image.set_alpha(100)
                 
         # Vẽ hiệu ứng khiên bảo vệ
-        if self.has_shield: # Thêm hiệu ứng khiên đẹp hơn
-            # Tạo một surface tạm thời để vẽ hiệu ứng glow bán trong suốt
-            shield_glow_surface = pygame.Surface((PLAYER_WIDTH + 10, PLAYER_HEIGHT + 10), pygame.SRCALPHA)
-            # Vẽ hình tròn bán trong suốt màu xanh nhạt
-            pygame.draw.circle(shield_glow_surface, (0, 150, 255, 80), (shield_glow_surface.get_width() // 2, shield_glow_surface.get_height() // 2), PLAYER_WIDTH // 2 + 5)
-            self.image.blit(shield_glow_surface, (-5, -5)) # Blit lên ảnh player với offset để căn giữa
-            pygame.draw.circle(self.image, COLOR_BLUE, (PLAYER_WIDTH // 2, PLAYER_HEIGHT // 2), PLAYER_WIDTH // 2 + 5, 3) # Vẽ viền khiên
+        if self.has_shield and self.shield_frames:
+            # Animation cho khiên
+            if now - self.last_shield_update >= self.shield_animation_interval:
+                self.last_shield_update = now
+                self.shield_frame_index = (self.shield_frame_index + 1) % len(self.shield_frames)
+            
+            # Blit shield frame lên ảnh player
+            shield_img = self.shield_frames[self.shield_frame_index]
+            self.image.blit(shield_img, (0, 0))
+
 
         # Chỉ đổi frame hiển thị bằng self.image, không đụng rect/di chuyển.
         now = pygame.time.get_ticks()
@@ -258,13 +280,14 @@ class Player(pygame.sprite.Sprite):
             self.last_frame_update = now
             self.frame_index = (self.frame_index + 1) % len(self.frames)
             self.image = self.frames[self.frame_index]
+            self.mask = self.masks[self.frame_index]
 
     def apply_powerup(self, p_type):
         """
         Kích hoạt hiệu ứng của vật phẩm tăng sức mạnh.
         """
         now = pygame.time.get_ticks()
-        duration = POWERUP_DURATION
+        duration = POWERUP_DURATION_BOOST
 
         if p_type == "pierce":
             self.pierce_expire_time = now + duration
@@ -279,9 +302,11 @@ class Player(pygame.sprite.Sprite):
         elif p_type == "rapid_fire":
             self.rapid_fire_expire_time = now + duration
         elif p_type == "shield":
-            self.shield_expire_time = now + duration
+            duration_shield = POWERUP_DURATION_SHIELD
+            self.shield_expire_time = now + duration_shield
             self.has_shield = True
         elif p_type == "cursed":
+
             # Bùa hại: không bắn được trong 3 giây
             self.cursed_expire_time = now + 3000
 
@@ -390,16 +415,118 @@ class Enemy(pygame.sprite.Sprite):
         self.rect.centery = y
         self.target_y = y  # Lưu tọa độ Y mục tiêu (để làm hiệu ứng bay xuống)
 
-    def update(self):
+        # --- Logic tấn công cho Boss ---
+        if enemy_type == "boss":
+            self.state = "normal"
+            self.attack_timer = pygame.time.get_ticks()
+            self.attack_cooldown = 4000  # 4 giây bắn 1 lần
+            self.charge_duration = 1000  # 1 giây tụ lực
+            self.telegraph_duration = 800 # 0.8 giây cảnh báo (Step 1)
+            self.fire_duration = 1500    # 1.5 giây bắn chưởng (Step 2)
+
+            
+            # Load hiệu ứng (27.png: tụ lực)
+            self.normal_frames = self.frames # Lưu lại animation gốc
+            self.charging_effect_frames = _load_sprite_sheet_frames("27.png", 40, 40, 3, scale=BOSS_SCALE)
+            self.firing_effect_frames = [] # Đã dùng step 2.png trong lớp Laser
+            self.effect_frame_index = 0
+            self.last_effect_update = pygame.time.get_ticks()
+            
+            self.laser = None
+
+
+
+
+
+    def update(self, all_sprites=None, lasers_group=None):
         """
         Gọi mỗi frame.
         - Xử lý animation frame.
+        - Xử lý logic tấn công nếu là Boss.
         """
         now = pygame.time.get_ticks()
+        
+        if self.enemy_type == "boss":
+            self._update_boss_logic(now, all_sprites, lasers_group)
+        
         if now - self.last_frame_update >= self.animation_interval:
             self.last_frame_update = now
             self.frame_index = (self.frame_index + 1) % len(self.frames)
-            self.image = self.frames[self.frame_index]
+            self.image = self.frames[self.frame_index].copy()
+            
+            # Nếu đang tấn công, vẽ thêm hiệu ứng đè lên boss
+            if self.enemy_type == "boss" and self.state in ["charging", "firing"]:
+                self._draw_attack_effect(now)
+
+
+    def _update_boss_logic(self, now, all_sprites, lasers_group):
+        """Logic trạng thái của Boss: Normal -> Charging -> Firing"""
+        if self.state == "normal":
+            if now - self.attack_timer > self.attack_cooldown:
+                self.state = "charging"
+                self.attack_timer = now
+                self.effect_frame_index = 0
+        
+        elif self.state == "charging":
+            if now - self.attack_timer > self.charge_duration:
+                self.state = "telegraphing"
+                self.attack_timer = now
+                # Tạo Laser Step 1 (Cảnh báo)
+                if all_sprites is not None and lasers_group is not None:
+                    self.laser = Laser(self)
+                    self.laser.set_step(1)
+                    all_sprites.add(self.laser)
+                    lasers_group.add(self.laser)
+        
+        elif self.state == "telegraphing":
+            if now - self.attack_timer > self.telegraph_duration:
+                self.state = "firing"
+                self.attack_timer = now
+                self.effect_frame_index = 0
+                # Chuyển Laser sang Step 2 (Bắn thật)
+
+                if self.laser:
+                    self.laser.set_step(2)
+        
+        elif self.state == "firing":
+            if now - self.attack_timer > self.fire_duration:
+                self.state = "normal"
+                self.attack_timer = now
+                if self.laser:
+
+                    self.laser.kill()
+                    self.laser = None
+
+
+    def _draw_attack_effect(self, now):
+        """
+        (Private) Vẽ hiệu ứng tụ lực/bắn chưởng đè lên boss.
+        Vị trí: Ở phía dưới (đít) của con boss.
+        """
+        effect_frames = []
+        if self.state == "charging":
+            effect_frames = self.charging_effect_frames
+        elif self.state == "firing":
+            effect_frames = self.firing_effect_frames
+            
+        if not effect_frames:
+            return
+
+        # Cập nhật animation hiệu ứng
+        if now - self.last_effect_update > 100:
+            self.last_effect_update = now
+            self.effect_frame_index = (self.effect_frame_index + 1) % len(effect_frames)
+        
+        # Blit hiệu ứng vào phía dưới của con boss
+        eff_img = effect_frames[self.effect_frame_index]
+        # Căn giữa ngang (cộng thêm offset 10px sang phải cho cân)
+        pos_x = (self.image.get_width() - eff_img.get_width()) // 2 + 10
+        pos_y = self.image.get_height() - eff_img.get_height() - 10
+        self.image.blit(eff_img, (pos_x, pos_y))
+
+
+
+
 
     def take_damage(self, amount=1):
         """
@@ -408,9 +535,87 @@ class Enemy(pygame.sprite.Sprite):
         """
         self.hp -= amount
         if self.hp <= 0:
+            if self.enemy_type == "boss" and self.laser:
+                self.laser.kill()
             self.kill()
             return True
         return False
+
+
+# =============================================================================
+# CLASS: Laser
+# MÔ TẢ: Tia laze do Boss bắn ra, gây sát thương cho Player.
+# =============================================================================
+class Laser(pygame.sprite.Sprite):
+    def __init__(self, owner):
+        super().__init__()
+        self.owner = owner
+
+        self.width = 100
+        self.height = SCREEN_HEIGHT
+        
+        # Load ảnh laser từ assets
+        self.image_step1 = None
+        self.image_step2 = None
+        
+        path1 = ASSETS_IMAGES_DIR / "step 1.png"
+        path2 = ASSETS_IMAGES_DIR / "step 2.png"
+        
+        if path1.exists():
+            self.image_step1 = pygame.image.load(str(path1)).convert_alpha()
+        if path2.exists():
+            self.image_step2 = pygame.image.load(str(path2)).convert_alpha()
+
+        self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+        
+        self.step = 1
+        self.is_deadly = False
+        self._draw_laser()
+        self.update()
+
+    def set_step(self, step):
+        self.step = step
+        self._draw_laser()
+
+    def _draw_laser(self):
+        """Sử dụng ảnh từ assets để hiển thị laser"""
+        if self.step == 1:
+            self.is_deadly = False
+            if self.image_step1:
+                self.image = self.image_step1
+            else:
+                # Fallback nếu thiếu file
+                self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                pygame.draw.line(self.image, (255, 0, 0, 100), (self.width//2, 0), (self.width//2, self.height), 2)
+        else:
+            self.is_deadly = True
+            if self.image_step2:
+                self.image = self.image_step2
+            else:
+                # Fallback
+                self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+                pygame.draw.rect(self.image, (255, 255, 255), (self.width//2 - 10, 0, 20, self.height))
+
+
+
+    def update(self):
+        # Tia laze luôn đi theo vị trí X của Boss
+        if self.owner.alive():
+            # Cộng thêm offset 10px sang phải để cân với tâm của boss
+            self.rect.centerx = self.owner.rect.centerx + 10
+            # Điều chỉnh vị trí Y để laze không bị đè lên chân/mình gà
+
+            # Đẩy điểm bắt đầu của laze xuống thấp hơn một chút (sát mép dưới của "cục đỏ")
+            eff_h = 100 # 40 * 2.5
+            # Thay vì bắt đầu từ tâm (eff_h // 2), ta bắt đầu gần đáy (eff_h - 20)
+            start_y_offset = self.owner.rect.height - 25 # Đẩy xuống sát đáy sprite boss
+            self.rect.top = self.owner.rect.top + start_y_offset
+        else:
+            self.kill()
+
+
+
 
 
 # =============================================================================
@@ -435,19 +640,40 @@ class Bullet(pygame.sprite.Sprite):
         self.bullet_type = bullet_type
         self.health = 1  # Mặc định đạn có 1 "máu", trúng là biến mất
 
-        if self.bullet_type == "pierce":
-            # Đạn xuyên: to hơn, màu đỏ, có 2 "máu"
-            self.health = 2
-            self.image = pygame.Surface((BULLET_WIDTH * 1.5, BULLET_HEIGHT * 1.5), pygame.SRCALPHA)
-            pygame.draw.rect(self.image, COLOR_RED,
-                             (0, 0, self.image.get_width(), self.image.get_height()), border_radius=4)
+        # Load bullet image based on type
+        sheet_name = "bullet_pierce.png" if self.bullet_type == "pierce" else "bullet.png"
+        # Scale down the 40x40 images to fit the game better
+        scale = 0.5 if self.bullet_type == "pierce" else 0.35
+        
+        # Load frames (tick = 1)
+        self.frames = _load_sprite_sheet_frames(
+            sheet_name=sheet_name,
+            frame_width=40, # Kích thước gốc trong file là 40x40
+            frame_height=40,
+            frame_count=1,
+            row=0,
+            scale=scale
+        )
+
+        
+        if self.frames:
+            self.image = self.frames[0]
         else:
-            # Đạn thường: màu vàng
-            self.image = pygame.Surface((BULLET_WIDTH, BULLET_HEIGHT), pygame.SRCALPHA) # Đạn thường
-            pygame.draw.rect(self.image, COLOR_YELLOW,
-                             (0, 0, BULLET_WIDTH, BULLET_HEIGHT), border_radius=2)
-            pygame.draw.rect(self.image, COLOR_WHITE,
-                             (BULLET_WIDTH // 2 - 1, 1, 1, BULLET_HEIGHT - 4))
+            # Fallback if image not found
+            if self.bullet_type == "pierce":
+                # Đạn xuyên: to hơn, màu đỏ, có 2 "máu"
+                self.health = 2
+                self.image = pygame.Surface((BULLET_WIDTH * 1.5, BULLET_HEIGHT * 1.5), pygame.SRCALPHA)
+                pygame.draw.rect(self.image, COLOR_RED,
+                                 (0, 0, self.image.get_width(), self.image.get_height()), border_radius=4)
+            else:
+                # Đạn thường: màu vàng
+                self.image = pygame.Surface((BULLET_WIDTH, BULLET_HEIGHT), pygame.SRCALPHA) # Đạn thường
+                pygame.draw.rect(self.image, COLOR_YELLOW,
+                                 (0, 0, BULLET_WIDTH, BULLET_HEIGHT), border_radius=2)
+                pygame.draw.rect(self.image, COLOR_WHITE,
+                                 (BULLET_WIDTH // 2 - 1, 1, 1, BULLET_HEIGHT - 4))
+
 
 
         # --- Thiết lập vị trí: đặt viên đạn tại miệng nòng súng ---
@@ -480,39 +706,117 @@ class Egg(pygame.sprite.Sprite):
     def __init__(self, x, y):
         """
         Khởi tạo quả trứng tại vị trí (x, y) — thường là dưới chân Enemy.
-
-        Tham số:
-            x (int): Tọa độ X tâm quả trứng.
-            y (int): Tọa độ Y đỉnh quả trứng (đặt tại chân gà).
         """
         super().__init__()
 
-        # --- Tạo placeholder hình quả trứng: hình elip màu trắng ---
-        self.image = pygame.Surface((EGG_WIDTH, EGG_HEIGHT), pygame.SRCALPHA)
-        # Thân trứng: elip trắng
-        pygame.draw.ellipse(self.image, COLOR_WHITE,
-                            (0, 0, EGG_WIDTH, EGG_HEIGHT))
-        # Viền ngoài: elip xám nhạt
-        pygame.draw.ellipse(self.image, (200, 200, 200),
-                            (0, 0, EGG_WIDTH, EGG_HEIGHT), 1)
+        # --- Load sprite sheets ---
+        # Trứng bình thường (Asset hiện tại là 40x40, chỉ có 1 frame)
+        self.normal_frames = _load_sprite_sheet_frames(
+            sheet_name="egg_sheet.png",
+            frame_width=EGG_WIDTH,
+            frame_height=EGG_HEIGHT,
+            frame_count=1,
+            row=0,
+            scale=0.75
+        )
+        
+        # Hiệu ứng bể trứng (Asset hiện tại là 40x40, chỉ có 1 frame)
+        self.break_frames = _load_sprite_sheet_frames(
+            sheet_name="egg_break_sheet.png",
+            frame_width=EGG_WIDTH,
+            frame_height=EGG_HEIGHT,
+            frame_count=1,
+            row=0,
+            scale=0.75
+        )
 
-        # --- Thiết lập vị trí: đặt trứng tại chân gà ---
+        # Fallback nếu không load được ảnh
+        if not self.normal_frames:
+            self.normal_frames = [self._create_fallback_egg()]
+        if not self.break_frames:
+            self.break_frames = [self._create_fallback_break()]
+
+        self.frames = self.normal_frames
+        self.frame_index = 0
+        self.image = self.frames[self.frame_index]
+        
+        self.is_breaking = False
+        self.animation_interval = 150  # ms/frame
+        self.break_duration = 500      # Trứng vỡ hiện trong 500ms nếu chỉ có 1 frame
+        self.break_start_time = 0
+        self.last_frame_update = pygame.time.get_ticks()
+
+        # Pre-calculate masks for pixel-perfect collision
+        self.normal_masks = [pygame.mask.from_surface(f) for f in self.normal_frames]
+        self.break_masks = [pygame.mask.from_surface(f) for f in self.break_frames]
+        self.masks = self.normal_masks
+        self.mask = self.masks[self.frame_index]
+
+        # --- Thiết lập vị trí ---
         self.rect = self.image.get_rect()
         self.rect.centerx = x
-        self.rect.top     = y  # Đỉnh trứng = đáy Enemy (trứng bay xuống)
+        self.rect.top     = y
+
+    def _create_fallback_egg(self):
+        """Tạo hình trứng giả lập nếu thiếu file ảnh."""
+        surf = pygame.Surface((EGG_WIDTH, EGG_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.ellipse(surf, COLOR_WHITE, (4, 4, EGG_WIDTH - 8, EGG_HEIGHT - 8))
+        pygame.draw.ellipse(surf, (200, 200, 200), (4, 4, EGG_WIDTH - 8, EGG_HEIGHT - 8), 1)
+        return surf
+
+    def _create_fallback_break(self):
+        """Tạo hình bể trứng giả lập."""
+        surf = pygame.Surface((EGG_WIDTH, EGG_HEIGHT), pygame.SRCALPHA)
+        pygame.draw.arc(surf, COLOR_WHITE, (4, 4, EGG_WIDTH - 8, EGG_HEIGHT - 8), 0, 3.14, 2)
+        return surf
 
     def update(self):
         """
         Gọi mỗi frame.
-        - Di chuyển trứng xuống phía dưới màn hình.
-        - Tự động xóa khỏi game khi vượt qua cạnh dưới.
+        - Nếu đang rơi: di chuyển xuống và kiểm tra chạm đáy.
+        - Nếu chạm đáy: chuyển sang trạng thái 'breaking'.
+        - Nếu đang break: chạy hết animation rồi biến mất.
         """
-        # Bay xuống: tăng tọa độ Y
-        self.rect.y += EGG_SPEED
+        now = pygame.time.get_ticks()
 
-        # --- Xóa trứng khỏi tất cả Group khi ra khỏi màn hình ---
-        if self.rect.top > SCREEN_HEIGHT:
-            self.kill()
+        if not self.is_breaking:
+            # Di chuyển xuống
+            self.rect.y += EGG_SPEED
+            
+            # Animation khi đang rơi (nếu có > 1 frame)
+            if now - self.last_frame_update >= self.animation_interval:
+                self.last_frame_update = now
+                if len(self.frames) > 1:
+                    self.frame_index = (self.frame_index + 1) % len(self.frames)
+                    self.image = self.frames[self.frame_index]
+                    self.mask = self.masks[self.frame_index]
+
+            # Kiểm tra chạm đáy màn hình
+            if self.rect.bottom >= SCREEN_HEIGHT:
+                self.rect.bottom = SCREEN_HEIGHT # Dừng lại ở đáy
+                self.is_breaking = True
+                self.frames = self.break_frames
+                self.masks = self.break_masks
+                self.frame_index = 0
+                self.break_start_time = now
+                self.last_frame_update = now
+                self.image = self.frames[self.frame_index]
+                self.mask = self.masks[self.frame_index]
+        else:
+            # Xử lý animation bể trứng
+            if len(self.frames) > 1:
+                if now - self.last_frame_update >= self.animation_interval:
+                    self.last_frame_update = now
+                    self.frame_index += 1
+                    if self.frame_index >= len(self.frames):
+                        self.kill()
+                    else:
+                        self.image = self.frames[self.frame_index]
+                        self.mask = self.masks[self.frame_index]
+            else:
+                # Nếu chỉ có 1 frame break, giữ nó hiện ra một lúc
+                if now - self.break_start_time >= self.break_duration:
+                    self.kill()
 
 # =============================================================================
 # CLASS: Explosion
@@ -558,16 +862,33 @@ class ShieldSprite(pygame.sprite.Sprite):
     def __init__(self, target):
         super().__init__()
         self.target = target
-        self.image = pygame.Surface((PLAYER_WIDTH + 10, PLAYER_HEIGHT + 10), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, (0, 150, 255, 80), (self.image.get_width() // 2, self.image.get_height() // 2), PLAYER_WIDTH // 2 + 5)
-        pygame.draw.circle(self.image, COLOR_BLUE, (self.image.get_width() // 2, self.image.get_height() // 2), PLAYER_WIDTH // 2 + 5, 3)
+        self.frames = _load_sprite_sheet_frames(
+            sheet_name="shield_player.png",
+            frame_width=PLAYER_WIDTH,
+            frame_height=PLAYER_HEIGHT,
+            frame_count=3,
+            row=0,
+            scale=PLAYER_SCALE
+        )
+        self.frame_index = 0
+        self.image = self.frames[self.frame_index] if self.frames else pygame.Surface((0,0))
+        self.animation_interval = 100
+        self.last_update = pygame.time.get_ticks()
+
         self.rect = self.image.get_rect(center=self.target.rect.center)
 
     def update(self):
         if hasattr(self.target, 'has_shield') and self.target.has_shield:
             self.rect.center = self.target.rect.center
+            # Animation (tick = 3)
+            now = pygame.time.get_ticks()
+            if now - self.last_update >= self.animation_interval:
+                self.last_update = now
+                self.frame_index = (self.frame_index + 1) % len(self.frames)
+                self.image = self.frames[self.frame_index]
         else:
             self.kill()
+
 
 
 # =============================================================================
@@ -588,19 +909,42 @@ class PowerUp(pygame.sprite.Sprite):
         """
         super().__init__()
         self.type = p_type
+        
+        # Mapping từ loại powerup sang tên file ảnh (Dùng hộp quà màu sắc)
+        POWERUP_IMAGES = {
+            "pierce":      "red.png",
+            "triple_shot": "green.png",
+            "shield":      "15.png",    # Giả định 15.png là màu vàng (Yellow)
+            "rapid_fire":  "purple.png",
+            "double_shot": "pink.png",
+            "cursed":      "black.png"
+        }
 
-        self.image = pygame.Surface((POWERUP_WIDTH, POWERUP_HEIGHT), pygame.SRCALPHA)
         
-        # Lấy màu từ settings.py, nếu không có thì mặc định là màu trắng
-        box_color = POWERUP_TYPES.get(p_type, COLOR_WHITE)
-        ribbon_color = COLOR_WHITE
-        
-        # Vẽ hình hộp quà có nơ
-        pygame.draw.rect(self.image, box_color, (0, 4, POWERUP_WIDTH, POWERUP_HEIGHT - 4))
-        pygame.draw.rect(self.image, ribbon_color, (POWERUP_WIDTH // 2 - 2, 4, 4, POWERUP_HEIGHT - 4))
-        pygame.draw.rect(self.image, ribbon_color, (0, POWERUP_HEIGHT // 2, POWERUP_WIDTH, 4))
-        pygame.draw.circle(self.image, ribbon_color, (POWERUP_WIDTH // 2 - 5, 4), 5)
-        pygame.draw.circle(self.image, ribbon_color, (POWERUP_WIDTH // 2 + 5, 4), 5)
+        image_name = POWERUP_IMAGES.get(p_type)
+        self.frames = _load_sprite_sheet_frames(
+            sheet_name=image_name,
+            frame_width=40, # Kích thước gốc trong file là 40x40
+            frame_height=40,
+            frame_count=1, # tick = 1
+            row=0,
+            scale=1.0
+        )
+
+        if self.frames:
+            self.original_image = pygame.transform.scale(self.frames[0], (POWERUP_WIDTH, POWERUP_HEIGHT))
+            self.image = self.original_image.copy()
+        else:
+            # Fallback nếu không load được ảnh
+            self.image = pygame.Surface((POWERUP_WIDTH, POWERUP_HEIGHT), pygame.SRCALPHA)
+            box_color = POWERUP_TYPES.get(p_type, COLOR_WHITE)
+            ribbon_color = COLOR_WHITE
+            pygame.draw.rect(self.image, box_color, (0, 4, POWERUP_WIDTH, POWERUP_HEIGHT - 4))
+            pygame.draw.rect(self.image, ribbon_color, (POWERUP_WIDTH // 2 - 2, 4, 4, POWERUP_HEIGHT - 4))
+            pygame.draw.rect(self.image, ribbon_color, (0, POWERUP_HEIGHT // 2, POWERUP_WIDTH, 4))
+            pygame.draw.circle(self.image, ribbon_color, (POWERUP_WIDTH // 2 - 5, 4), 5)
+            pygame.draw.circle(self.image, ribbon_color, (POWERUP_WIDTH // 2 + 5, 4), 5)
+            self.original_image = self.image.copy()
 
         self.rect = self.image.get_rect()
         self.rect.centerx = x
@@ -609,10 +953,9 @@ class PowerUp(pygame.sprite.Sprite):
         # --- Biến phục vụ chuyển động lượn sóng và animation ---
         self.base_x = x
         self.wave_angle = 0
-        # Lưu trữ ảnh gốc để tái tạo lại khi scale animation (tránh giảm chất lượng ảnh)
-        self.original_image = self.image.copy()
 
     def update(self):
+
         """
         Gọi mỗi frame. Di chuyển rơi dọc, lượn sóng ngang, chạy animation nhịp đập 
         và tự xóa khi ra khỏi màn hình.
