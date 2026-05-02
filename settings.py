@@ -42,12 +42,15 @@ BULLET_HEIGHT = 14    # Chiều cao viên đạn (pixel)
 BULLET_SPEED  = 10    # Tốc độ đạn bay lên (pixel/frame, giá trị dương = đi lên)
 BULLET_COOLDOWN = 300 # Thời gian hồi chiêu bắn mặc định (milliseconds)
 RAPID_FIRE_COOLDOWN = 100 # Thời gian hồi chiêu khi có power-up rapid_fire
+BULLET_DAMAGE = 1      # Sát thương đạn thường
+BULLET_PIERCE_DAMAGE = 2 # Sát thương đạn xuyên (pierce)
 
 # --- CẤU HÌNH EGG (Trứng gà) ---
 EGG_WIDTH  = 40     # Chiều rộng trứng (pixel)
 EGG_HEIGHT = 40    # Chiều cao trứng (pixel)
-EGG_SPEED  = 5     # Tốc độ trứng bay xuống (pixel/frame)
-EGG_DROP_COUNT = 6 # Số lượng trứng thả mỗi lượt (khoảng 6 con)
+EGG_SPEED  = 3     # Tốc độ trứng bay xuống (Giảm từ 5 -> 3 cho dễ)
+EGG_DROP_COUNT = 3 # Số lượng trứng thả mỗi lượt (Giảm từ 6 -> 3)
+EGG_DROP_CHANCE = 0.7 # Tỉ lệ thả trứng mỗi khi chạm biên (70%)
 
 # --- CẤU HÌNH POWER-UP (Vật phẩm tăng sức mạnh) ---
 POWERUP_WIDTH  = 30    # Chiều rộng vật phẩm (pixel)
@@ -73,7 +76,7 @@ BOSS_WIDTH    = 100   # Chiều rộng khung hình trong sheet
 BOSS_HEIGHT   = 100   # Chiều cao khung hình trong sheet
 BOSS_SCALE    = 2.5   # Hệ số phóng to Boss (Chỉnh cái này để Boss to lên)
 ENEMY_SPEED_X = 1.5   # Tốc độ di chuyển ngang ban đầu (pixel/frame)
-ENEMY_DROP_Y  = 20    # Khoảng cách hạ xuống khi chạm biên (pixel)
+ENEMY_DROP_Y  = 10    # Khoảng cách hạ xuống khi chạm biên (pixel)
 
 # 4 loại gà con theo máu + 1 boss
 ENEMY_HP_BY_TYPE = {
