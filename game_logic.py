@@ -12,8 +12,13 @@
 import pygame
 import sys
 import random
+from pathlib import Path
 from settings import *
 from sprites import Player, Enemy, Bullet, Egg, PowerUp
+
+# Đường dẫn tới thư mục ảnh
+ASSETS_IMAGES_DIR = Path(__file__).resolve().parent / "assets" / "image"
+
 
 
 # =============================================================================
@@ -242,6 +247,9 @@ class Game:
         self.eggs        = pygame.sprite.Group()
         # Group riêng cho PowerUp — dùng để kiểm tra va chạm vật phẩm-player
         self.powerups    = pygame.sprite.Group()
+        # Group riêng cho Laser của Boss
+        self.lasers      = pygame.sprite.Group()
+
 
         # --- Trạng thái game ---
         self.score      = 0       # Điểm số hiện tại
@@ -256,6 +264,23 @@ class Game:
 
         # --- Khởi tạo đội hình gà ---
         self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs, self.wave)
+
+        # --- Load Power-up Icons cho HUD ---
+        self.powerup_icons = {}
+        icon_map = {
+            "pierce":      "pierce.png",
+            "triple_shot": "tripple.png",
+            "shield":      "shield.png",
+            "rapid_fire":  "rapid.png",
+            "double_shot": "double.png",
+            "cursed":      "curse.png"
+        }
+        for p_type, filename in icon_map.items():
+            path = ASSETS_IMAGES_DIR / filename
+            if path.exists():
+                img = pygame.image.load(str(path)).convert_alpha()
+                self.powerup_icons[p_type] = pygame.transform.scale(img, (30, 30))
+
 
     # -------------------------------------------------------------------------
     # VÒNG LẶP CHÍNH
@@ -331,7 +356,11 @@ class Game:
         # Dùng vòng lặp riêng để không gọi player.update() 2 lần
         for sprite in self.all_sprites:
             if sprite is not self.player:
-                sprite.update()
+                if isinstance(sprite, Enemy):
+                    sprite.update(self.all_sprites, self.lasers)
+                else:
+                    sprite.update()
+
 
         # Di chuyển đội hình gà và kiểm tra gà chạm đáy
         fleet_reached_bottom = self.fleet.update()
@@ -351,7 +380,11 @@ class Game:
         # Xử lý va chạm vật phẩm - player
         self._handle_powerup_collision()
 
+        # Xử lý va chạm laser - player
+        self._handle_laser_player_collision()
+
         # Kiểm tra điều kiện chuyển wave / chiến thắng
+
         self._check_wave_progression()
 
     # -------------------------------------------------------------------------
@@ -398,11 +431,20 @@ class Game:
         collisions = pygame.sprite.spritecollide(
             self.player,   # Sprite cần kiểm tra
             self.enemies,  # Group để kiểm tra chồng lên
-            False          # Không xóa tự động — để hiển thị Game Over trước
+            False,         # Không xóa tự động — để hiển thị Game Over trước
+            collided=pygame.sprite.collide_mask
         )
 
         if collisions:
-            self.game_over = True
+            if self.player.has_shield:
+                # Shield bảo vệ được 1 nhát: mất khiên và giết enemy va chạm
+                self.player.has_shield = False
+                self.player.shield_expire_time = 0
+                for enemy in collisions:
+                    enemy.kill()
+            else:
+                self.game_over = True
+
 
     def _handle_egg_player_collision(self):
         """
@@ -414,11 +456,20 @@ class Game:
         collisions = pygame.sprite.spritecollide(
             self.player,  # Sprite cần kiểm tra
             self.eggs,    # Group để kiểm tra chồng lên
-            False         # Không xóa tự động — để hiển thị Game Over trước
+            False,        # Không xóa tự động — để hiển thị Game Over trước
+            collided=pygame.sprite.collide_mask
         )
 
         if collisions:
-            self.game_over = True
+            if self.player.has_shield:
+                # Shield bảo vệ được 1 nhát khỏi trứng
+                self.player.has_shield = False
+                self.player.shield_expire_time = 0
+                for egg in collisions:
+                    egg.kill()
+            else:
+                self.game_over = True
+
 
     def _handle_powerup_collision(self):
         """
@@ -435,6 +486,31 @@ class Game:
             self.player.apply_powerup(p.type)
             # Có thể cộng thêm một ít điểm khi ăn item
             self.score += 50
+
+    def _handle_laser_player_collision(self):
+        """
+        (Private) Kiểm tra va chạm giữa tia laze của Boss và Player.
+        """
+        hits = pygame.sprite.spritecollide(
+            self.player,
+            self.lasers,
+            False,
+            collided=pygame.sprite.collide_mask
+        )
+
+        if hits:
+            # Chỉ xử lý va chạm nếu tia laze đang ở trạng thái gây sát thương (Step 2)
+            deadly_hits = [h for h in hits if getattr(h, "is_deadly", True)]
+            
+            if deadly_hits:
+                if self.player.has_shield:
+                    self.player.has_shield = False
+                    self.player.shield_expire_time = 0
+                    # Laser không bị mất khi chạm shield, nhưng shield bảo vệ được 1 lần
+                else:
+                    self.game_over = True
+
+
 
     # -------------------------------------------------------------------------
     # QUẢN LÝ WAVE / TIẾN TRÌNH GAME
@@ -471,6 +547,8 @@ class Game:
         self.eggs.empty()
         # Xóa hết vật phẩm còn lại
         self.powerups.empty()
+        self.lasers.empty()
+
 
         # Tăng tốc và tạo lại đội hình mới
         self.fleet.increase_speed()
@@ -497,6 +575,8 @@ class Game:
         self.bullets.empty()
         self.eggs.empty()
         self.powerups.empty()
+        self.lasers.empty()
+
 
         # Tạo lại Player
         self.player = Player()
@@ -532,6 +612,8 @@ class Game:
 
         # 4. Vẽ HUD
         self._draw_hud()
+        self._draw_powerup_status()
+
 
         # 5. Vẽ màn Game Over hoặc Win nếu cần
         if self.game_over:
@@ -611,6 +693,61 @@ class Game:
 
         boss_text = self.font_small.render(f"BOSS HP: {boss.hp}/{boss.max_hp}", True, COLOR_WHITE)
         self.screen.blit(boss_text, (x + (bar_width - boss_text.get_width()) // 2, y - 22))
+
+    def _draw_powerup_status(self):
+        """
+        Vẽ danh sách các power-up đang hoạt động và thời gian còn lại ở góc dưới trái.
+        """
+        now = pygame.time.get_ticks()
+        active_powerups = []
+        
+        # Kiểm tra các loại buff
+        if self.player.pierce_expire_time > now:
+            active_powerups.append(("pierce", self.player.pierce_expire_time))
+        if self.player.triple_shot_expire_time > now:
+            active_powerups.append(("triple_shot", self.player.triple_shot_expire_time))
+        if self.player.double_shot_expire_time > now:
+            active_powerups.append(("double_shot", self.player.double_shot_expire_time))
+        if self.player.rapid_fire_expire_time > now:
+            active_powerups.append(("rapid_fire", self.player.rapid_fire_expire_time))
+        if self.player.shield_expire_time > now:
+            active_powerups.append(("shield", self.player.shield_expire_time))
+        if self.player.cursed_expire_time > now:
+            active_powerups.append(("cursed", self.player.cursed_expire_time))
+            
+        if not active_powerups:
+            return
+
+        # Vị trí bắt đầu vẽ (góc dưới trái)
+        x = 20
+        y = SCREEN_HEIGHT - 45
+        
+        # Mapping tên hiển thị cho người dùng
+        powerup_names = {
+            "pierce":      "Pierce",
+            "triple_shot": "Triple",
+            "double_shot": "Double",
+            "rapid_fire":  "Rapid",
+            "shield":      "Shield",
+            "cursed":      "Cursed"
+        }
+        
+        for p_type, expire_time in active_powerups:
+            if p_type in self.powerup_icons:
+                icon = self.powerup_icons[p_type]
+                self.screen.blit(icon, (x, y))
+                
+                # Hiển thị tên + thời gian
+                name = powerup_names.get(p_type, "")
+                remaining = (expire_time - now) / 1000
+                status_text = f"{name}: {remaining:.1f}s"
+                
+                text_surf = self.font_small.render(status_text, True, COLOR_WHITE)
+                self.screen.blit(text_surf, (x + 35, y + 5))
+                
+                x += 150  # Tăng khoảng cách vì có thêm tên
+
+
 
     def _draw_game_over_screen(self):
         """

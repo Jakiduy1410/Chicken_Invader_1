@@ -44,8 +44,8 @@ BULLET_COOLDOWN = 300 # Thời gian hồi chiêu bắn mặc định (millisecon
 RAPID_FIRE_COOLDOWN = 100 # Thời gian hồi chiêu khi có power-up rapid_fire
 
 # --- CẤU HÌNH EGG (Trứng gà) ---
-EGG_WIDTH  = 12     # Chiều rộng trứng (pixel)
-EGG_HEIGHT = 12    # Chiều cao trứng (pixel)
+EGG_WIDTH  = 40     # Chiều rộng trứng (pixel)
+EGG_HEIGHT = 40    # Chiều cao trứng (pixel)
 EGG_SPEED  = 5     # Tốc độ trứng bay xuống (pixel/frame)
 EGG_DROP_COUNT = 6 # Số lượng trứng thả mỗi lượt (khoảng 6 con)
 
@@ -54,7 +54,9 @@ POWERUP_WIDTH  = 30    # Chiều rộng vật phẩm (pixel)
 POWERUP_HEIGHT = 30    # Chiều cao vật phẩm (pixel)
 POWERUP_SPEED  = 4     # Tốc độ rơi (pixel/frame)
 POWERUP_DROP_RATE = 0.15 # Tỉ lệ rơi vật phẩm khi gà bị tiêu diệt (15%)
-POWERUP_DURATION = 10000 # Thời gian hiệu lực của Power-up (10 giây)
+POWERUP_DURATION_BOOST = 7000 # Thời gian hiệu lực của Power-up thường (7 giây)
+POWERUP_DURATION_SHIELD = 10000 # Thời gian hiệu lực của Khiên (10 giây)
+
 POWERUP_TYPES = {        # Các loại power-up và màu sắc tương ứng
     "pierce":      COLOR_RED,
     "triple_shot": COLOR_GREEN,
@@ -79,7 +81,7 @@ ENEMY_HP_BY_TYPE = {
     "chick_2": 2,
     "chick_3": 3,
     "chick_4": 4,
-    "boss": 20,
+    "boss": 200,
 }
 
 # --- CẤU HÌNH ĐỘI HÌNH GÀ (Grid Formation) ---
