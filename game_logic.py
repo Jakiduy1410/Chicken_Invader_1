@@ -319,7 +319,7 @@ class Game:
 
         # --- Trạng thái game ---
         self.score      = 0       # Điểm số hiện tại
-        self.wave       = 3      # Bắt đầu từ wave 1
+        self.wave       = 1      # Bắt đầu từ wave 1
         self.running    = True    # Game đang chạy?
         self.game_over  = False   # Trạng thái Game Over
         self.victory    = False   # Trạng thái chiến thắng
