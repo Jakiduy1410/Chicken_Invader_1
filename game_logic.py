@@ -128,7 +128,7 @@ class EnemyFleet:
                 enemy.kill()
                 
         # Chọn ngẫu nhiên pattern (Chỉ chọn Wave 1 hoặc Wave 4 vì Wave 2, 3 quá khó cho màn Boss)
-        rand_wave = random.choice([1, 4])
+        rand_wave = random.choice([1, 3])
         coords = get_wave_pattern(rand_wave)
         
         # Nếu có boss_rect, dịch chuyển tọa độ để gà spawn "dưới chân" boss
