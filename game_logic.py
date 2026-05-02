@@ -15,6 +15,8 @@ import random
 from pathlib import Path
 from settings import *
 from sprites import Player, Enemy, Bullet, Egg, PowerUp
+from backend import AudioManager
+
 
 # Đường dẫn tới thư mục ảnh
 ASSETS_IMAGES_DIR = Path(__file__).resolve().parent / "assets" / "image"
@@ -253,10 +255,17 @@ class Game:
 
         # --- Trạng thái game ---
         self.score      = 0       # Điểm số hiện tại
-        self.wave       = 1  # Bắt đầu ngay tại màn Boss để test
+        self.wave       = MAX_WAVES  # Bắt đầu ngay tại màn Boss để test
         self.running    = True    # Game đang chạy?
         self.game_over  = False   # Trạng thái Game Over
         self.victory    = False   # Trạng thái chiến thắng
+        
+        # --- Khởi tạo Âm thanh ---
+        self.audio = AudioManager()
+        self.audio.load_resources()
+
+        # self.audio.play_bgm() # User chưa yêu cầu nhạc nền
+
 
         # --- Khởi tạo Player ---
         self.player = Player()
@@ -350,16 +359,18 @@ class Game:
         self.player.update()
 
         # Xử lý bắn đạn (tách riêng để truyền Group vào)
-        self.player.handle_shoot(self.all_sprites, self.bullets)
+        self.player.handle_shoot(self.all_sprites, self.bullets, self.audio)
+
 
         # Cập nhật tất cả sprite còn lại (đạn bay lên, gà animation...)
         # Dùng vòng lặp riêng để không gọi player.update() 2 lần
         for sprite in self.all_sprites:
             if sprite is not self.player:
                 if isinstance(sprite, Enemy):
-                    sprite.update(self.all_sprites, self.lasers)
+                    sprite.update(self.all_sprites, self.lasers, self.audio)
                 else:
                     sprite.update()
+
 
 
         # Di chuyển đội hình gà và kiểm tra gà chạm đáy
@@ -413,6 +424,8 @@ class Game:
                 if enemy.take_damage(1):
                     score_multiplier = enemy.max_hp
                     self.score += SCORE_PER_KILL * score_multiplier
+                    self.audio.play_chicken_exp()
+
 
                     # --- Logic rơi PowerUp ---
                     if random.random() < POWERUP_DROP_RATE:
@@ -440,10 +453,13 @@ class Game:
                 # Shield bảo vệ được 1 nhát: mất khiên và giết enemy va chạm
                 self.player.has_shield = False
                 self.player.shield_expire_time = 0
+                self.audio.play_explosion()
                 for enemy in collisions:
                     enemy.kill()
             else:
+                self.audio.play_explosion()
                 self.game_over = True
+
 
 
     def _handle_egg_player_collision(self):
@@ -465,10 +481,13 @@ class Game:
                 # Shield bảo vệ được 1 nhát khỏi trứng
                 self.player.has_shield = False
                 self.player.shield_expire_time = 0
+                self.audio.play_explosion()
                 for egg in collisions:
                     egg.kill()
             else:
+                self.audio.play_explosion()
                 self.game_over = True
+
 
 
     def _handle_powerup_collision(self):
@@ -506,9 +525,12 @@ class Game:
                 if self.player.has_shield:
                     self.player.has_shield = False
                     self.player.shield_expire_time = 0
+                    self.audio.play_explosion()
                     # Laser không bị mất khi chạm shield, nhưng shield bảo vệ được 1 lần
                 else:
+                    self.audio.play_explosion()
                     self.game_over = True
+
 
 
 

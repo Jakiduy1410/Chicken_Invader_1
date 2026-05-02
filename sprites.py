@@ -310,13 +310,14 @@ class Player(pygame.sprite.Sprite):
             # Bùa hại: không bắn được trong 3 giây
             self.cursed_expire_time = now + 3000
 
-    def handle_shoot(self, all_sprites, bullets_group):
+    def handle_shoot(self, all_sprites, bullets_group, audio=None):
         """
         Kiểm tra phím Space và tạo viên đạn mới nếu cooldown đã hết.
 
         Tham số:
             all_sprites  (pygame.sprite.Group): Group chứa TẤT CẢ sprite — để render.
             bullets_group (pygame.sprite.Group): Group riêng cho đạn — để detect collision.
+            audio (AudioManager): Quản lý âm thanh.
 
         Trả về: None
         """
@@ -335,6 +336,11 @@ class Player(pygame.sprite.Sprite):
             # Chỉ bắn nếu đã qua thời gian cooldown
             if now - self._last_shot_time > cooldown:
                 self._last_shot_time = now  # Cập nhật thời điểm bắn
+                
+                # Phát âm thanh bắn
+                if audio:
+                    audio.play_shoot()
+
 
                 # Kiểm tra các buff đang kích hoạt
                 is_pierce = now < self.pierce_expire_time
@@ -419,10 +425,11 @@ class Enemy(pygame.sprite.Sprite):
         if enemy_type == "boss":
             self.state = "normal"
             self.attack_timer = pygame.time.get_ticks()
-            self.attack_cooldown = 4000  # 4 giây bắn 1 lần
-            self.charge_duration = 1000  # 1 giây tụ lực
-            self.telegraph_duration = 800 # 0.8 giây cảnh báo (Step 1)
-            self.fire_duration = 1500    # 1.5 giây bắn chưởng (Step 2)
+            self.attack_cooldown = 3500  # 3.5 giây bắn 1 lần (dồn dập hơn)
+            self.charge_duration = 3000  # 1.2 giây tụ lực (tạo sự chờ đợi)
+            self.telegraph_duration = 300 # 0.6 giây cảnh báo (nhanh và kịch tính hơn)
+            self.fire_duration = 2800    # 2.0 giây bắn thật (hoành tráng hơn)
+
 
             
             # Load hiệu ứng (27.png: tụ lực)
@@ -438,7 +445,7 @@ class Enemy(pygame.sprite.Sprite):
 
 
 
-    def update(self, all_sprites=None, lasers_group=None):
+    def update(self, all_sprites=None, lasers_group=None, audio=None):
         """
         Gọi mỗi frame.
         - Xử lý animation frame.
@@ -447,7 +454,8 @@ class Enemy(pygame.sprite.Sprite):
         now = pygame.time.get_ticks()
         
         if self.enemy_type == "boss":
-            self._update_boss_logic(now, all_sprites, lasers_group)
+            self._update_boss_logic(now, all_sprites, lasers_group, audio)
+
         
         if now - self.last_frame_update >= self.animation_interval:
             self.last_frame_update = now
@@ -459,13 +467,16 @@ class Enemy(pygame.sprite.Sprite):
                 self._draw_attack_effect(now)
 
 
-    def _update_boss_logic(self, now, all_sprites, lasers_group):
+    def _update_boss_logic(self, now, all_sprites, lasers_group, audio=None):
         """Logic trạng thái của Boss: Normal -> Charging -> Firing"""
         if self.state == "normal":
             if now - self.attack_timer > self.attack_cooldown:
                 self.state = "charging"
                 self.attack_timer = now
                 self.effect_frame_index = 0
+                if audio:
+                    audio.play_boss_lazer()
+
         
         elif self.state == "charging":
             if now - self.attack_timer > self.charge_duration:
@@ -487,6 +498,8 @@ class Enemy(pygame.sprite.Sprite):
 
                 if self.laser:
                     self.laser.set_step(2)
+
+
         
         elif self.state == "firing":
             if now - self.attack_timer > self.fire_duration:
