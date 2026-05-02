@@ -16,6 +16,7 @@ from pathlib import Path
 from settings import *
 from sprites import Player, Enemy, Bullet, Egg, PowerUp
 from backend import AudioManager
+from level import get_wave_pattern
 
 
 # Đường dẫn tới thư mục ảnh
@@ -48,59 +49,101 @@ class EnemyFleet:
 
         # Tốc độ hiện tại — có thể tăng theo wave
         self.speed_x = ENEMY_SPEED_X
+        self.v_direction = 1 # 1 = xuống, -1 = lên (cho logic bật lại)
+        self.last_egg_drop_time = 0 # Thời điểm thả trứng gần nhất
+        self.boss_initial_y = 100 # Vị trí ban đầu mặc định của Boss
 
         # Tạo đội hình lần đầu
         self.wave = wave
-        self._spawn_fleet()
+        coords = get_wave_pattern(self.wave)
+        self._spawn_fleet(pattern_coords=coords)
 
-    def _spawn_fleet(self):
+    def _spawn_fleet(self, pattern_coords=None):
         """
-        (Private) Sinh toàn bộ đội hình gà theo dạng lưới.
-        Boss ở trên cùng, các hàng gà con ở phía dưới.
+        Sinh đội hình gà.
+        - Nếu pattern_coords được cung cấp (từ level.py), dùng tọa độ đó.
+        - Nếu không (mặc định), tự tính lưới hoặc sinh Boss.
         """
-        # 1. Tính toán không gian cho Boss (nếu là wave cuối)
+        # 1. Nếu có tọa độ từ level.py, dùng luôn cho gà con
+        # Offset để cả đội hình "bay xuống" đồng bộ
+        spawn_offset_y = -450 
+        
+        # Tốc độ trượt: Wave 2 chậm hơn (1.5), các wave khác 3.0
+        wave_slide_speed = 1.5 if self.wave == 2 else 3.0
+
+        if pattern_coords:
+            for i, (px, py) in enumerate(pattern_coords):
+                type_cycle = ["chick_1", "chick_2", "chick_3", "chick_4"]
+                enemy_type = type_cycle[i % len(type_cycle)]
+                hp = ENEMY_HP_BY_TYPE[enemy_type]
+                # Gà được tạo ở vị trí (px, py - offset) nhưng có target là (px, py)
+                enemy = Enemy(px, py + spawn_offset_y, enemy_type=enemy_type, hp=hp, slide_speed=wave_slide_speed)
+                enemy.target_y = py
+                self.all_sprites.add(enemy)
+                self.enemies.add(enemy)
+            return
+
+        # 2. Logic dự phòng hoặc cho Boss
         boss_render_h = int(BOSS_HEIGHT * BOSS_SCALE)
         
         if self.wave == MAX_WAVES:
-            # Nếu có Boss, bắt đầu đội hình rất cao để Boss bị khuất phần lớn phía trên
-            # Nó sẽ dần hiện ra khi cả đội hình di chuyển và hạ thấp xuống (drop)
             current_grid_top = -150 
             boss_offset_y = boss_render_h + 20
         else:
             current_grid_top = ENEMY_GRID_TOP
             boss_offset_y = 0
 
-        # 2. Tính tổng chiều rộng của lưới để căn giữa màn hình
-        total_grid_width  = (ENEMY_COLS - 1) * ENEMY_H_SPACING
-        start_x = (SCREEN_WIDTH - total_grid_width) // 2  # X của cột đầu tiên
-
-        # 3. Tạo đội hình gà con
-        for row in range(ENEMY_ROWS):
-            for col in range(ENEMY_COLS):
-                x = start_x + col * ENEMY_H_SPACING
-                y = current_grid_top + boss_offset_y + row * ENEMY_V_SPACING
-
-                type_cycle = ["chick_1", "chick_2", "chick_3", "chick_4"]
-                enemy_type = type_cycle[(row + col) % len(type_cycle)]
-                hp = ENEMY_HP_BY_TYPE[enemy_type]
-                enemy = Enemy(x, y, enemy_type=enemy_type, hp=hp)
-                self.all_sprites.add(enemy)
-                self.enemies.add(enemy)
-
-        # 4. Thêm 1 gà boss ở wave cuối tại vị trí TRÊN CÙNG
+        # Nếu không có pattern từ level.py, sinh 1 boss ở wave cuối
         if self.wave == MAX_WAVES:
-            # Boss ở trên cùng của đội hình
-            target_boss_y = current_grid_top + (boss_render_h // 2)
-            
+            final_boss_y = current_grid_top + (boss_render_h // 2)
+            self.boss_initial_y = final_boss_y
             boss = Enemy(
                 SCREEN_WIDTH // 2,
-                target_boss_y,
+                final_boss_y + spawn_offset_y, # Cũng áp dụng offset cho boss
                 enemy_type="boss",
-                hp=ENEMY_HP_BY_TYPE["boss"]
+                hp=ENEMY_HP_BY_TYPE["boss"],
+                slide_speed=3.0 # Boss bay xuống bình thường
             )
-            
+            boss.target_y = final_boss_y
             self.all_sprites.add(boss)
             self.enemies.add(boss)
+        else:
+            # Fallback lưới nếu level.py trả về [] (không nên xảy ra trừ khi cấu hình sai)
+            total_grid_width  = (ENEMY_COLS - 1) * ENEMY_H_SPACING
+            start_x = (SCREEN_WIDTH - total_grid_width) // 2
+            for row in range(ENEMY_ROWS):
+                for col in range(ENEMY_COLS):
+                    x = start_x + col * ENEMY_H_SPACING
+                    y = current_grid_top + row * ENEMY_V_SPACING
+                    enemy = Enemy(x, y + spawn_offset_y, enemy_type="chick_1", hp=1)
+                    enemy.target_y = y
+                    self.all_sprites.add(enemy)
+                    self.enemies.add(enemy)
+
+    def spawn_reinforcements(self, boss_rect=None):
+        """Sinh thêm gà hỗ trợ cho Boss khi Boss chuyển phase."""
+        # Xóa các con gà cũ (trừ boss) để tránh lag và rối mắt
+        for enemy in self.enemies:
+            if enemy.enemy_type != "boss":
+                enemy.kill()
+                
+        # Chọn ngẫu nhiên pattern (Chỉ chọn Wave 1 hoặc Wave 4 vì Wave 2, 3 quá khó cho màn Boss)
+        rand_wave = random.choice([1, 4])
+        coords = get_wave_pattern(rand_wave)
+        
+        # Nếu có boss_rect, dịch chuyển tọa độ để gà spawn "dưới chân" boss
+        if boss_rect:
+            # Tìm Y cao nhất trong pattern để căn chỉnh
+            min_y = min(y for _, y in coords) if coords else 0
+            # Offset = chân boss - min_y của pattern - một khoảng để sát boss hơn
+            y_offset = boss_rect.bottom - min_y - 40
+            
+            new_coords = []
+            for px, py in coords:
+                new_coords.append((px, py + y_offset))
+            coords = new_coords
+
+        self._spawn_fleet(pattern_coords=coords)
 
     def update(self):
         """
@@ -120,12 +163,12 @@ class EnemyFleet:
             enemy.rect.x += self.speed_x * self.direction
 
             # Kiểm tra chạm biên PHẢI
-            if enemy.rect.right >= SCREEN_WIDTH:
+            if enemy.rect.right > SCREEN_WIDTH:
                 should_reverse = True
                 break  # Chỉ cần 1 con chạm là đủ để đổi chiều
 
             # Kiểm tra chạm biên TRÁI
-            if enemy.rect.left <= 0:
+            if enemy.rect.left < 0:
                 should_reverse = True
                 break
 
@@ -147,13 +190,27 @@ class EnemyFleet:
         """
         self.direction *= -1  # Đảo chiều: +1 → -1 hoặc ngược lại
 
-        for enemy in self.enemies:
-            # Hạ thấp xuống theo ENEMY_DROP_Y
-            enemy.rect.y += ENEMY_DROP_Y
+        if self.enemies:
+            lowest_y = max(e.target_y for e in self.enemies)
+            highest_y = min(e.target_y for e in self.enemies)
+            
+            # 1/3 cách đáy tương đương với 2/3 màn hình (khoảng 460-500px)
+            bounce_threshold = SCREEN_HEIGHT * 0.6 
+            # Giới hạn trên: không để con cao nhất bay quá xa màn hình
+            top_threshold = 50 
+            
+            if lowest_y >= bounce_threshold:
+                self.v_direction = -1
+            elif highest_y <= top_threshold:
+                self.v_direction = 1
 
-            # Nếu enemy là Boss (có target_y), cập nhật target_y để bay xuống đúng vị trí mới của đội hình
+        for enemy in self.enemies:
+            # Chỉ cập nhật target_y để cả đội hình "trượt" xuống từ từ trong Enemy.update
             if hasattr(enemy, "target_y"):
-                enemy.target_y += ENEMY_DROP_Y
+                enemy.target_y += self.v_direction * ENEMY_DROP_Y
+            else:
+                # Nếu không có target_y (đề phòng), hạ ngay lập tức
+                enemy.rect.y += self.v_direction * ENEMY_DROP_Y
 
             # Đẩy gà vào trong màn hình nếu vẫn đang tràn ra ngoài
             if enemy.rect.right > SCREEN_WIDTH:
@@ -161,16 +218,20 @@ class EnemyFleet:
             if enemy.rect.left < 0:
                 enemy.rect.left = 0
 
-        # Thả trứng: chọn ngẫu nhiên EGG_DROP_COUNT gà để thả trứng
-        if len(self.enemies) >= EGG_DROP_COUNT:
-            droppers = random.sample(list(self.enemies), EGG_DROP_COUNT)
-        else:
-            droppers = list(self.enemies)  # Nếu ít gà hơn, thả tất cả
-
-        for enemy in droppers:
-            egg = Egg(enemy.rect.centerx, enemy.rect.bottom)
-            self.all_sprites.add(egg)
-            self.eggs.add(egg)
+        # Thả trứng: chỉ thả nếu đạt tỉ lệ EGG_DROP_CHANCE và hết cooldown
+        now = pygame.time.get_ticks()
+        if now - self.last_egg_drop_time > 1500: # Cooldown 1.5 giây
+            if random.random() < EGG_DROP_CHANCE:
+                self.last_egg_drop_time = now
+                if len(self.enemies) >= EGG_DROP_COUNT:
+                    droppers = random.sample(list(self.enemies), EGG_DROP_COUNT)
+                else:
+                    droppers = list(self.enemies)  # Nếu ít gà hơn, thả tất cả
+        
+                for enemy in droppers:
+                    egg = Egg(enemy.rect.centerx, enemy.rect.bottom)
+                    self.all_sprites.add(egg)
+                    self.eggs.add(egg)
 
     def increase_speed(self, increment=SPEED_INCREMENT):
         """
@@ -205,7 +266,10 @@ class EnemyFleet:
             self.speed_x = new_speed
 
         self.direction = 1  # Reset hướng về phải
-        self._spawn_fleet()  # Tạo lại đội hình
+        
+        # Lấy pattern từ level.py
+        coords = get_wave_pattern(self.wave)
+        self._spawn_fleet(pattern_coords=coords)
 
 
 # =============================================================================
@@ -255,10 +319,13 @@ class Game:
 
         # --- Trạng thái game ---
         self.score      = 0       # Điểm số hiện tại
-        self.wave       = MAX_WAVES  # Bắt đầu ngay tại màn Boss để test
+        self.wave       = 3      # Bắt đầu từ wave 1
         self.running    = True    # Game đang chạy?
         self.game_over  = False   # Trạng thái Game Over
         self.victory    = False   # Trạng thái chiến thắng
+
+        # Boss phase tracking
+        self.boss_last_phase_hp = ENEMY_HP_BY_TYPE["boss"]
         
         # --- Khởi tạo Âm thanh ---
         self.audio = AudioManager()
@@ -374,10 +441,14 @@ class Game:
 
 
         # Di chuyển đội hình gà và kiểm tra gà chạm đáy
+        # Giảm tốc độ hạ xuống (drop) nếu cần, ở đây ENEMY_DROP_Y trong settings
         fleet_reached_bottom = self.fleet.update()
         if fleet_reached_bottom:
             self.game_over = True
             return  # Dừng update ngay lập tức
+
+        # Xử lý Logic Boss Phase (mất 1/5 HP)
+        self._update_boss_phase()
 
         # Xử lý va chạm đạn - gà
         self._handle_bullet_enemy_collision()
@@ -419,9 +490,14 @@ class Game:
         )
 
         # Trừ máu từng enemy; chỉ cộng điểm khi enemy chết.
-        for _, hit_enemies in hits.items():
+        for bullet, hit_enemies in hits.items():
             for enemy in hit_enemies:
-                if enemy.take_damage(1):
+                # Tính sát thương dựa trên loại đạn
+                damage = BULLET_DAMAGE
+                if hasattr(bullet, 'bullet_type') and bullet.bullet_type == "pierce":
+                    damage = BULLET_PIERCE_DAMAGE
+                    
+                if enemy.take_damage(damage):
                     score_multiplier = enemy.max_hp
                     self.score += SCORE_PER_KILL * score_multiplier
                     self.audio.play_chicken_exp()
@@ -530,6 +606,32 @@ class Game:
                 else:
                     self.audio.play_explosion()
                     self.game_over = True
+
+
+    def _update_boss_phase(self):
+        """Kiểm tra máu Boss để chuyển phase: bay lên + spawn gà con."""
+        boss = self._get_alive_boss()
+        if not boss:
+            return
+
+        # 1/5 HP của Boss 200 là 40.
+        phase_threshold = ENEMY_HP_BY_TYPE["boss"] // 5
+        
+        if self.boss_last_phase_hp - boss.hp >= phase_threshold:
+            # Chuyển phase!
+            self.boss_last_phase_hp = boss.hp
+            
+            # 1. Cho Boss quay về giữa màn hình (vị trí ban đầu)
+            # Chỉ cần chỉnh target_y, Enemy.update sẽ lo phần trượt lên/xuống
+            boss.target_y = self.fleet.boss_initial_y
+            # Đưa boss về giữa ngang nếu đang ở xa
+            boss.rect.centerx = SCREEN_WIDTH // 2
+            
+            # 2. Spawn thêm 1 đội hình gà con hỗ trợ NGAY DƯỚI CHÂN Boss
+            self.fleet.spawn_reinforcements(boss_rect=boss.rect)
+            
+            # 3. Phản hồi âm thanh
+            self.audio.play_boss_lazer() # Dùng tạm tiếng laser báo hiệu
 
 
 

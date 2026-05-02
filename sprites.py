@@ -379,7 +379,7 @@ class Player(pygame.sprite.Sprite):
 # =============================================================================
 class Enemy(pygame.sprite.Sprite):
 
-    def __init__(self, x, y, enemy_type="chick_1", hp=1):
+    def __init__(self, x, y, enemy_type="chick_1", hp=1, slide_speed=3):
         """
         Khởi tạo một con gà tại vị trí lưới (x, y).
 
@@ -419,7 +419,8 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.centerx = x
         self.rect.centery = y
-        self.target_y = y  # Lưu tọa độ Y mục tiêu (để làm hiệu ứng bay xuống)
+        self.target_y = y  # Tọa độ Y mục tiêu
+        self.slide_speed = slide_speed
 
         # --- Logic tấn công cho Boss ---
         if enemy_type == "boss":
@@ -449,10 +450,22 @@ class Enemy(pygame.sprite.Sprite):
         """
         Gọi mỗi frame.
         - Xử lý animation frame.
+        - Xử lý hiệu ứng bay xuống từ từ (target_y).
         - Xử lý logic tấn công nếu là Boss.
         """
         now = pygame.time.get_ticks()
         
+        # 1. Hiệu ứng trượt (Slide): Di chuyển rect.centery về phía target_y
+        if hasattr(self, "target_y") and self.rect.centery != self.target_y:
+            if self.rect.centery < self.target_y:
+                self.rect.centery += self.slide_speed
+                if self.rect.centery > self.target_y:
+                    self.rect.centery = self.target_y
+            elif self.rect.centery > self.target_y:
+                self.rect.centery -= self.slide_speed
+                if self.rect.centery < self.target_y:
+                    self.rect.centery = self.target_y
+
         if self.enemy_type == "boss":
             self._update_boss_logic(now, all_sprites, lasers_group, audio)
 
