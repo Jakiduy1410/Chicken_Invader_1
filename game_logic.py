@@ -320,8 +320,8 @@ class Game:
         self.ui_hud         = ui.HUD()
 
         # --- Sprite Groups ---
-        # Group chứa TẤT CẢ sprite — dùng để render (draw) và update
-        self.all_sprites = pygame.sprite.Group()
+        # Group chứa TẤT CẢ sprite — dùng LayeredUpdates để quản lý lớp vẽ (layer)
+        self.all_sprites = pygame.sprite.LayeredUpdates()
         # Group riêng cho Enemy — dùng để kiểm tra va chạm đạn-gà
         self.enemies     = pygame.sprite.Group()
         # Group riêng cho Bullet — dùng để kiểm tra va chạm đạn-gà và gà-player
@@ -799,7 +799,7 @@ class Game:
         self.all_sprites.add(self.player)
 
         # Tạo lại đội hình gà với tốc độ mặc định
-        self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs)
+        self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs, self.wave)
         self.fleet.speed_x = ENEMY_SPEED_X
 
     # -------------------------------------------------------------------------

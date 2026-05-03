@@ -391,6 +391,7 @@ class Enemy(pygame.sprite.Sprite):
         self.enemy_type = enemy_type
         self.max_hp = hp
         self.hp = hp
+        self._layer = 1 # Vẽ gà/boss lên trên tia laze
 
         # Xác định kích thước và scale dựa trên loại enemy
         w = BOSS_WIDTH if enemy_type == "boss" else ENEMY_WIDTH
@@ -439,6 +440,7 @@ class Enemy(pygame.sprite.Sprite):
             self.firing_effect_frames = [] # Đã dùng step 2.png trong lớp Laser
             self.effect_frame_index = 0
             self.last_effect_update = pygame.time.get_ticks()
+            self.charging_animation_interval = 40 # ms/frame cho 27 frame (khoảng 1 giây tổng cộng)
             
             self.laser = None
 
@@ -539,15 +541,16 @@ class Enemy(pygame.sprite.Sprite):
             return
 
         # Cập nhật animation hiệu ứng
-        if now - self.last_effect_update > 100:
+        interval = self.charging_animation_interval if self.state == "charging" else 100
+        if now - self.last_effect_update > interval:
             self.last_effect_update = now
             self.effect_frame_index = (self.effect_frame_index + 1) % len(effect_frames)
         
         # Blit hiệu ứng vào phía dưới của con boss
         eff_img = effect_frames[self.effect_frame_index]
-        # Căn giữa ngang (cộng thêm offset 10px sang phải cho cân)
-        pos_x = (self.image.get_width() - eff_img.get_width()) // 2 + 10
-        pos_y = self.image.get_height() - eff_img.get_height() - 10
+        # Căn giữa ngang chính xác theo boss
+        pos_x = (self.image.get_width() - eff_img.get_width()) // 1.85
+        pos_y = self.image.get_height() - eff_img.get_height() - 25
         self.image.blit(eff_img, (pos_x, pos_y))
 
 
@@ -576,27 +579,52 @@ class Laser(pygame.sprite.Sprite):
     def __init__(self, owner):
         super().__init__()
         self.owner = owner
+        self._layer = 0 # Vẽ tia laze dưới con gà
 
         self.width = 100
         self.height = SCREEN_HEIGHT
         
         # Load ảnh laser từ assets
         self.image_step1 = None
-        self.image_step2 = None
+        self.image_step2_frames = []
         
-        path1 = ASSETS_IMAGES_DIR / "step 1.png"
-        path2 = ASSETS_IMAGES_DIR / "step 2.png"
+        path1 = ASSETS_IMAGES_DIR / "step_1.png"
+        path2_1 = ASSETS_IMAGES_DIR / "step_2_1.png"
+        path2_2 = ASSETS_IMAGES_DIR / "step_2_2.png"
         
         if path1.exists():
-            self.image_step1 = pygame.image.load(str(path1)).convert_alpha()
-        if path2.exists():
-            self.image_step2 = pygame.image.load(str(path2)).convert_alpha()
+            img = pygame.image.load(str(path1)).convert_alpha()
+            if BOSS_SCALE != 1.0:
+                img = pygame.transform.scale(img, (int(img.get_width() * BOSS_SCALE), int(img.get_height() * BOSS_SCALE)))
+            self.image_step1 = img
+        
+        if path2_1.exists():
+            img = pygame.image.load(str(path2_1)).convert_alpha()
+            if BOSS_SCALE != 1.0:
+                img = pygame.transform.scale(img, (int(img.get_width() * BOSS_SCALE), int(img.get_height() * BOSS_SCALE)))
+            self.image_step2_frames.append(img)
+        if path2_2.exists():
+            img = pygame.image.load(str(path2_2)).convert_alpha()
+            if BOSS_SCALE != 1.0:
+                img = pygame.transform.scale(img, (int(img.get_width() * BOSS_SCALE), int(img.get_height() * BOSS_SCALE)))
+            self.image_step2_frames.append(img)
+
+        # Fallback if step 2 frames are missing
+        if not self.image_step2_frames:
+            fallback = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
+            pygame.draw.rect(fallback, (255, 255, 255), (self.width//2 - 10, 0, 20, self.height))
+            self.image_step2_frames = [fallback]
 
         self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
         self.rect = self.image.get_rect()
         
         self.step = 1
         self.is_deadly = False
+        
+        self.anim_index = 0
+        self.last_anim_update = pygame.time.get_ticks()
+        self.anim_interval = 60 # ms per frame for step 2 flicker
+        
         self._draw_laser()
         self.update()
 
@@ -610,32 +638,47 @@ class Laser(pygame.sprite.Sprite):
             self.is_deadly = False
             if self.image_step1:
                 self.image = self.image_step1
+                # Update rect and maintain position
+                pos = (self.rect.centerx, self.rect.top)
+                self.rect = self.image.get_rect()
+                self.rect.centerx, self.rect.top = pos
             else:
                 # Fallback nếu thiếu file
                 self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
                 pygame.draw.line(self.image, (255, 0, 0, 100), (self.width//2, 0), (self.width//2, self.height), 2)
         else:
             self.is_deadly = True
-            if self.image_step2:
-                self.image = self.image_step2
-            else:
-                # Fallback
-                self.image = pygame.Surface((self.width, self.height), pygame.SRCALPHA)
-                pygame.draw.rect(self.image, (255, 255, 255), (self.width//2 - 10, 0, 20, self.height))
+            # Animation index được cập nhật trong update()
+            self.image = self.image_step2_frames[self.anim_index]
+            # Update rect and maintain position
+            pos = (self.rect.centerx, self.rect.top)
+            self.rect = self.image.get_rect()
+            self.rect.centerx, self.rect.top = pos
 
 
 
     def update(self):
         # Tia laze luôn đi theo vị trí X của Boss
         if self.owner.alive():
-            # Cộng thêm offset 10px sang phải để cân với tâm của boss
-            self.rect.centerx = self.owner.rect.centerx + 10
-            # Điều chỉnh vị trí Y để laze không bị đè lên chân/mình gà
+            now = pygame.time.get_ticks()
+            
+            # Cập nhật animation cho Step 2
+            if self.step == 2 and len(self.image_step2_frames) > 1:
+                if now - self.last_anim_update > self.anim_interval:
+                    self.last_anim_update = now
+                    self.anim_index = (self.anim_index + 1) % len(self.image_step2_frames)
+                    self.image = self.image_step2_frames[self.anim_index]
+                    # Đảm bảo rect khớp với ảnh mới (đặc biệt là chiều rộng)
+                    pos = (self.rect.centerx, self.rect.top)
+                    self.rect = self.image.get_rect()
+                    self.rect.centerx, self.rect.top = pos
 
-            # Đẩy điểm bắt đầu của laze xuống thấp hơn một chút (sát mép dưới của "cục đỏ")
-            eff_h = 100 # 40 * 2.5
-            # Thay vì bắt đầu từ tâm (eff_h // 2), ta bắt đầu gần đáy (eff_h - 20)
-            start_y_offset = self.owner.rect.height - 25 # Đẩy xuống sát đáy sprite boss
+            # Căn giữa laser theo Boss và dịch sang phải một chút cho khớp với hiệu ứng tụ lực
+            self.rect.centerx = self.owner.rect.centerx + 10
+            
+            # Đẩy điểm bắt đầu của laze xuống sát mép dưới của Boss
+            # Trừ bớt 40px để laser trông như bắn ra từ bên trong boss (đít boss)
+            start_y_offset = self.owner.rect.height - 70
             self.rect.top = self.owner.rect.top + start_y_offset
         else:
             self.kill()
