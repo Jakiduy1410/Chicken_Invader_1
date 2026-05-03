@@ -183,18 +183,17 @@ def _sample_polyline_arc_length(
 
 
 def _pattern_heart(count: int) -> list[tuple[int, int]]:
-    """Wave 3 — 1 Trái tim xếp theo grid (đã ép size)."""
+    """Wave 3 — 1 Trái tim xếp theo grid (đã ép size, rỗng ruột có tim nhỏ bên trong)."""
     
-    # <-- CHÚ THÍCH: Gọt đỉnh xuống còn 2 '##' và bóp lại form cho cân đối
     heart_map = [
         "  ##   ##  ",
-        " #### #### ",
-        "###########",
-        "###########",
-        " ######### ",
-        "  #######  ",
-        "   #####   ",
-        "    ###    ",
+        " #  # #  # ",
+        "#    #    #",
+        "#  #   #  #", # <-- CHÚ THÍCH: Thêm 2 '#' làm 2 đỉnh tim nhỏ
+        " #  # #  # ", # <-- CHÚ THÍCH: Thêm 2 '#' làm viền tim nhỏ
+        "  #  #  #  ", # <-- CHÚ THÍCH: Thêm 1 '#' làm chóp dưới tim nhỏ
+        "   #   #   ",
+        "    # #    ",
         "     #     "
     ]
     

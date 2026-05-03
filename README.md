@@ -1,195 +1,86 @@
-# 🐔 Chicken Invaders — Team Project
+# 🚀 Chicken Invaders - Python Team Project
 
-## 🚀 Cài đặt & Chạy game
-
-```bash
-pip install pygame
-python main.py
-```
-
-## 🕹️ Điều khiển
-
-| Phím | Hành động |
-|------|-----------|
-| `← →` | Di chuyển máy bay |
-| `SPACE` | Bắn đạn |
-| `R` | Chơi lại (sau Game Over / Win) |
-| `ESC` | Thoát game |
+Chào mừng bạn đến với dự án **Chicken Invaders** được xây dựng bằng ngôn ngữ Python và thư viện Pygame. Đây là một bản clone hiện đại với đầy đủ tính năng từ Menu, Bảng xếp hạng đến các chế độ chơi thử thách.
 
 ---
 
-## 📁 Cấu trúc Project (Chuẩn chính thức)
+## 🎮 Tính năng chính
 
-```
-chicken_invaders/
-├── main.py            ← File chạy game (entry point)
-├── game_logic.py      ← Vòng lặp game, va chạm, state machine
-├── settings.py        ← Chứa TẤT CẢ thông số: màu sắc, tốc độ, size màn hình...
-├── sprites.py         ← Class Player, Enemy, Bullet, Egg, PowerUp...
-├── levels.py          ← [TẠO MỚI] Data tọa độ đội hình theo từng Wave
-├── ui.py              ← [TẠO MỚI] Class vẽ giao diện (Menu, HUD, Leaderboard)
-├── backend.py         ← [TẠO MỚI] Xử lý file điểm số (lưu/đọc)
-├── README.md
-└── assets/            ← [TẠO MỚI] Thư mục chứa tài nguyên
-    ├── images/        ← Ảnh gà, máy bay, background, icon...
-    └── audio/         ← Nhạc nền, tiếng súng, tiếng nổ...
-```
-
-> ⚠️ **Quy tắc bắt buộc:** Mọi tài nguyên (ảnh, âm thanh) phải đặt đúng trong `assets/images/` hoặc `assets/audio/`. Tuyệt đối không để file rải rác ở thư mục gốc.
+- **Chế độ Story (Cốt truyện)**: Trải nghiệm 5 màn chơi (Waves) với độ khó tăng dần, kết thúc bằng một trận đấu trùm (Boss) cực kỳ kịch tính.
+- **Chế độ Infinite (Vô tận)**: Mở khóa sau khi phá đảo Story Mode. Thử thách bản thân với các đợt tấn công ngẫu nhiên và hệ số điểm tăng dần theo thời gian.
+- **Hệ thống Power-ups**:
+    - 🛡️ **Shield**: Bảo vệ máy bay khỏi va chạm.
+    - 🚀 **Double/Triple Shot**: Tăng số lượng đạn bắn ra.
+    - ⚡ **Rapid Fire**: Tăng tốc độ bắn đạn.
+    - 💎 **Pierce**: Đạn xuyên thấu, tiêu diệt nhiều kẻ địch cùng lúc.
+- **Giao diện hiện đại (UI)**:
+    - Menu chính sống động với hiệu ứng Starfield.
+    - Bảng xếp hạng (Leaderboard) ghi lại những huyền thoại.
+    - Menu cài đặt (Settings) cho phép tùy chỉnh âm thanh và nhạc nền.
+- **Âm thanh & Hiệu ứng**: Hệ thống SFX sống động và nhạc nền cực cuốn.
 
 ---
 
-## 👥 Phân công nhiệm vụ chi tiết
+## 🛠️ Yêu cầu hệ thống
 
-### 👨‍💻 Dev 1 — Animation (Gà & Máy bay)
-**File làm việc:** `sprites.py` và `assets/images/`
-
-**Nhiệm vụ:**
-- Tìm/cắt sprite sheet cho Player và Enemy
-- Load mảng ảnh vào class `Player` và `Enemy`
-- Dùng `pygame.time.get_ticks()` để xử lý chuyển frame animation (vỗ cánh, xịt lửa) mà không làm đứng game
-
-> ⚠️ **GIỚI HẠN SCOPE:** Chỉ thay đổi cách hiển thị hình ảnh (`self.image`). **Tuyệt đối không** đụng vào `self.rect` hay logic di chuyển trong `update()`.
+- **Python**: Phiên bản 3.8 trở lên.
+- **Thư viện**: `pygame`.
 
 ---
 
-### 👨‍💻 Dev 2 — Kiến trúc sư Level (Đội hình bay)
-**File làm việc:** Tạo mới `levels.py`
+## 📥 Cách cài đặt
 
-**Nhiệm vụ:**
-- Thiết kế tọa độ xuất hiện của gà theo từng Wave
-- Viết hàm `get_wave_pattern(wave_num)` trả về danh sách tọa độ `(X, Y)` với nhiều hình khối: chữ V, hình tròn, zig-zag...
-
-**Ví dụ interface:**
-```python
-# levels.py
-def get_wave_pattern(wave_num: int) -> list[tuple[int, int]]:
-    """Trả về list tọa độ (x, y) của từng con gà trong wave."""
-    ...
-```
-
-> ⚠️ **GIỚI HẠN SCOPE:** File này thuần chứa **data và thuật toán sinh tọa độ**. Không viết bất kỳ logic Pygame hay lệnh `draw` nào ở đây.
+1. **Clone project** hoặc tải mã nguồn về máy.
+2. **Cài đặt thư viện Pygame**:
+   ```powershell
+   pip install pygame
+   ```
+3. **Kiểm tra Assets**: Đảm bảo thư mục `assets/` chứa đầy đủ hình ảnh và âm thanh cần thiết.
 
 ---
 
-### 👨‍💻 Dev 3 — Tính năng Boost / Power-ups
-**File làm việc:** `sprites.py` và `assets/images/`
+## 🚀 Cách chơi
 
-**Nhiệm vụ:**
-- Code thêm class `PowerUp` kế thừa `pygame.sprite.Sprite`
-- Thiết kế logic để boost thỉnh thoảng rơi từ trên xuống (tương tự class `Egg`)
-- Xử lý animation và chuyển động rơi của viên boost
-
-> ⚠️ **GIỚI HẠN SCOPE:** Chỉ code **sự di chuyển** của object PowerUp. Không viết logic va chạm (xử lý khi Player nhặt được boost — phần đó Leader ghép vào `game_logic.py`).
-
----
-
-### 👨‍💻 Dev 4 — Họa sĩ UI/UX (Giao diện & Màn hình)
-**File làm việc:** Tạo mới `ui.py`
-
-**Nhiệm vụ:**
-- Thiết kế và code các màn hình: **Menu chính**, **Leaderboard**, **Settings**
-- Căn chỉnh font chữ, nút bấm, layout tổng thể
-- Dùng **mock data** (dữ liệu giả) để dựng sẵn màn hình Leaderboard — Dev 5 sẽ cắm data thật vào sau
-
-**Ví dụ interface cần expose:**
-```python
-# ui.py
-class MainMenuScreen:
-    def draw(self, surface): ...
-
-class LeaderboardScreen:
-    def draw(self, surface, scores: list[tuple[str, int]]): ...
-    # scores = [("PlayerName", 9999), ...] — Dev 5 sẽ cung cấp list này
-```
-
-> ⚠️ **GIỚI HẠN SCOPE:** Mọi mã màu và kích thước font **phải kéo từ `settings.py`**. Không hardcode giá trị cứng (`#FF0000`, `36`...) trực tiếp vào `ui.py`.
+1. **Khởi động game**:
+   ```powershell
+   python main.py
+   ```
+2. **Điều khiển**:
+    - ⌨️ **Mũi tên (Left/Right/Up/Down)**: Di chuyển máy bay.
+    - ⌨️ **Dấu cách (SPACE)**: Bắn đạn.
+    - ⌨️ **R**: Chơi lại nhanh (khi Game Over/Victory).
+    - ⌨️ **ESC**: Quay lại Menu hoặc Thoát game.
 
 ---
 
-### 👨‍💻 Dev 5 — Backend & Audio
-**File làm việc:** Tạo mới `backend.py` và `assets/audio/`
+## 📂 Cấu trúc thư mục
 
-**Nhiệm vụ:**
-- Chuẩn bị và tổ chức file âm thanh (nhạc nền, tiếng súng, tiếng nổ...)
-- Viết logic lưu trữ/đọc điểm cao bằng JSON hoặc SQLite
-
-**Bắt buộc phải có 2 hàm public sau** (Dev 4 phụ thuộc vào đây):
-```python
-# backend.py
-
-def save_score(name: str, score: int) -> None:
-    """Lưu điểm của người chơi vào file/database."""
-    ...
-
-def get_top_scores(limit: int = 10) -> list[tuple[str, int]]:
-    """Trả về danh sách top điểm cao, sắp xếp giảm dần.
-    Ví dụ: [("Alice", 9500), ("Bob", 7200), ...]
-    """
-    ...
-```
-
-> ⚠️ **GIỚI HẠN SCOPE:** Chỉ xử lý I/O file và âm thanh. Logic game (tính điểm, khi nào gọi save) do Leader quản lý trong `game_logic.py`.
-
----
-
-## 🔗 Sơ đồ phụ thuộc giữa các module
-
-```
-settings.py  ←── được import bởi TẤT CẢ các file khác
-     │
-     ├── sprites.py    (Player, Enemy, Bullet, PowerUp)
-     │        ↑
-     ├── levels.py     (get_wave_pattern)  →  dữ liệu đầu vào cho EnemyFleet
-     │
-     ├── backend.py    (save_score, get_top_scores)
-     │        ↓
-     ├── ui.py         (MainMenuScreen, LeaderboardScreen)  ←  nhận data từ backend
-     │
-     └── game_logic.py  ←── TRUNG TÂM, import và kết nối tất cả
-              ↑
-          main.py  (chỉ gọi Game().run())
+```text
+Chicken_Invader/
+├── assets/                 # Tài nguyên game (audio, image)
+├── data/                   # Dữ liệu người chơi (JSON)
+│   ├── high_scores.json    # Bảng xếp hạng
+│   └── progress.json       # Tiến trình chơi
+├── backend.py              # Xử lý dữ liệu & Âm thanh
+├── game_logic.py           # Logic cốt lõi & State Machine
+├── level.py                # Định nghĩa các Wave mẫu
+├── main.py                 # File thực thi chính
+├── settings.py             # Cấu hình hằng số (Speed, Color, HP)
+├── sprites.py              # Các lớp đối tượng (Player, Enemy, v.v.)
+├── ui.py                   # Thành phần giao diện & Vẽ màn hình
+└── README.md               # Hướng dẫn dự án
 ```
 
 ---
 
-## 🔧 Snippets hữu ích
+## 🏆 Leaderboard Legends
 
-### Load ảnh thật thay placeholder
-```python
-# Trong sprites.py → Player.__init__()
-self.image = pygame.image.load("assets/images/player.png").convert_alpha()
-self.image = pygame.transform.scale(self.image, (PLAYER_WIDTH, PLAYER_HEIGHT))
-```
+Bảng xếp hạng hiện tại đang được thống trị bởi các huyền thoại:
+1. **Bombombuzin** - Điểm số: **∞**
+2. **Viet Gay** - Điểm số: **100kg**
+3. **Phat Ha Tinh** - Điểm số: **3838**
+... và nhiều người chơi khác. Hãy cố gắng ghi tên mình vào bảng vàng!
 
-### Animation vỗ cánh (Dev 1)
-```python
-# Trong Enemy.__init__()
-self.frames = [load frame 1, load frame 2, ...]
-self.frame_index = 0
-self.last_frame_time = 0
+---
 
-# Trong Enemy.update()
-now = pygame.time.get_ticks()
-if now - self.last_frame_time > 120:  # đổi frame mỗi 120ms
-    self.last_frame_time = now
-    self.frame_index = (self.frame_index + 1) % len(self.frames)
-    self.image = self.frames[self.frame_index]
-```
-
-### Thêm âm thanh (Dev 5)
-```python
-# Trong backend.py hoặc main.py
-pygame.mixer.init()
-shoot_sfx = pygame.mixer.Sound("assets/audio/shoot.wav")
-shoot_sfx.play()  # Gọi trong Player.handle_shoot()
-```
-
-### Thêm Lives (Leader ghép)
-```python
-# settings.py
-PLAYER_LIVES = 3
-
-# game_logic.py → Game.__init__()
-self.lives = PLAYER_LIVES
-```
+*Chúc bạn chơi game vui vẻ!* 🐔🚀
