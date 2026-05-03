@@ -3,19 +3,34 @@ import os
 import pygame
 
 # --- CẤU HÌNH ---
-SCORE_FILE = "high_scores.json"
+DATA_FOLDER = "data"
+SCORE_FILE = os.path.join(DATA_FOLDER, "high_scores.json")
+PROGRESS_FILE = os.path.join(DATA_FOLDER, "progress.json")
 AUDIO_FOLDER = "assets/audio"
 
 # Tự động tạo thư mục nếu chưa có
-if not os.path.exists(AUDIO_FOLDER):
-    os.makedirs(AUDIO_FOLDER)
+for folder in [DATA_FOLDER, AUDIO_FOLDER]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
 # --- LOGIC LƯU TRỮ ĐIỂM ---
 def save_score(name: str, score: int) -> None:
     """Lưu điểm vào file JSON."""
     scores = _load_raw_data()
     scores.append({"name": name, "score": score})
-    scores.sort(key=lambda x: x['score'], reverse=True)
+    
+    def get_sort_value(x):
+        val = x.get('score', 0)
+        if isinstance(val, int):
+            return val
+        # Nếu là string như "100kg", thử lấy số ra
+        import re
+        nums = re.findall(r'\d+', str(val))
+        if nums:
+            return int(nums[0])
+        return 0
+
+    scores.sort(key=get_sort_value, reverse=True)
     with open(SCORE_FILE, "w", encoding="utf-8") as f:
         json.dump(scores, f, ensure_ascii=False, indent=4)
     print(f"✅ Đã lưu điểm cho {name}")
@@ -32,12 +47,32 @@ def _load_raw_data():
             return json.load(f)
     except: return []
 
+# --- LOGIC TIẾN TRÌNH ---
+def save_progress(story_finished: bool = True) -> None:
+    """Lưu trạng thái hoàn thành Story Mode."""
+    data = {"story_finished": story_finished}
+    with open(PROGRESS_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+def is_story_finished() -> bool:
+    """Kiểm tra xem Story Mode đã hoàn thành chưa."""
+    if not os.path.exists(PROGRESS_FILE):
+        return False
+    try:
+        with open(PROGRESS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("story_finished", False)
+    except:
+        return False
+
 # --- QUẢN LÝ ÂM THANH ---
 class AudioManager:
     def __init__(self):
         if not pygame.mixer.get_init():
             pygame.mixer.init()
         self.sfx = {}
+        self.sfx_enabled = True
+        self.music_enabled = True
 
     def load_resources(self):
         """Tải các tệp âm thanh. Mỗi tệp được tải riêng để tránh lỗi nếu thiếu 1 file."""
@@ -71,30 +106,46 @@ class AudioManager:
 
     def play_bgm(self):
         """Phát nhạc nền lặp lại vô tận với âm lượng nhỏ hơn."""
-        # Giá trị từ 0.0 (tắt tiếng) đến 1.0 (âm lượng tối đa)
-        # 0.2 nghĩa là chỉ bằng 20% âm lượng gốc
+        if not self.music_enabled:
+            return
         pygame.mixer.music.set_volume(0.2) 
         pygame.mixer.music.play(-1)
         
+    def stop_bgm(self):
+        """Dừng nhạc nền."""
+        pygame.mixer.music.stop()
+
     def play_shoot(self):
         """Phát tiếng súng bắn."""
-        if "shoot" in self.sfx:
+        if self.sfx_enabled and "shoot" in self.sfx:
             self.sfx["shoot"].play()
 
     def play_explosion(self):
         """Phát tiếng nổ."""
-        if "explosion" in self.sfx:
+        if self.sfx_enabled and "explosion" in self.sfx:
             self.sfx["explosion"].play()
     
     def play_chicken_exp(self): 
         """Phát tiếng gà bị bắn nổ."""
-        if "chicken_exp" in self.sfx:
+        if self.sfx_enabled and "chicken_exp" in self.sfx:
             self.sfx["chicken_exp"].play()
     
     def play_boss_lazer(self): 
-        """Phát tiếng gà bị bắn nổ."""
-        if "boss_lazer" in self.sfx:
+        """Phát tiếng boss lazer."""
+        if self.sfx_enabled and "boss_lazer" in self.sfx:
             self.sfx["boss_lazer"].play()
+
+    def toggle_sfx(self):
+        self.sfx_enabled = not self.sfx_enabled
+        return self.sfx_enabled
+
+    def toggle_music(self):
+        self.music_enabled = not self.music_enabled
+        if self.music_enabled:
+            self.play_bgm()
+        else:
+            self.stop_bgm()
+        return self.music_enabled
             
         
 if __name__ == "__main__":

@@ -15,12 +15,22 @@ import random
 from pathlib import Path
 from settings import *
 from sprites import Player, Enemy, Bullet, Egg, PowerUp
-from backend import AudioManager
+from backend import AudioManager, get_top_scores, save_score, is_story_finished, save_progress
 from level import get_wave_pattern
+import ui
 
 
 # Đường dẫn tới thư mục ảnh
 ASSETS_IMAGES_DIR = Path(__file__).resolve().parent / "assets" / "image"
+
+# =============================================================================
+# GAME STATES
+# =============================================================================
+STATE_MENU        = "MENU"
+STATE_PLAY_MODE   = "PLAY_MODE"
+STATE_PLAYING     = "PLAYING"
+STATE_LEADERBOARD = "LEADERBOARD"
+STATE_SETTINGS    = "SETTINGS"
 
 
 
@@ -302,6 +312,13 @@ class Game:
         self.font_medium = pygame.font.SysFont("consolas", 24)
         self.font_small  = pygame.font.SysFont("consolas", 18)
 
+        # --- UI Screens ---
+        self.ui_menu        = ui.MainMenuScreen()
+        self.ui_leaderboard = ui.LeaderboardScreen()
+        self.ui_play_mode   = ui.PlayModeScreen()
+        self.ui_settings    = ui.SettingsScreen()
+        self.ui_hud         = ui.HUD()
+
         # --- Sprite Groups ---
         # Group chứa TẤT CẢ sprite — dùng để render (draw) và update
         self.all_sprites = pygame.sprite.Group()
@@ -318,7 +335,11 @@ class Game:
 
 
         # --- Trạng thái game ---
+        self.state      = STATE_MENU
+        self.game_mode  = "story" # "story" hoặc "infinite"
+        self.unlocked_infinite = is_story_finished()
         self.score      = 0       # Điểm số hiện tại
+        self.lives      = 3       # Số mạng của người chơi
         self.wave       = 1      # Bắt đầu từ wave 1
         self.running    = True    # Game đang chạy?
         self.game_over  = False   # Trạng thái Game Over
@@ -330,9 +351,12 @@ class Game:
         # --- Khởi tạo Âm thanh ---
         self.audio = AudioManager()
         self.audio.load_resources()
+        self.audio.play_bgm() 
 
-        # self.audio.play_bgm() # User chưa yêu cầu nhạc nền
 
+        # --- UI Buttons for End Screens ---
+        self.btn_restart = pygame.Rect(SCREEN_WIDTH // 2 - 210, SCREEN_HEIGHT // 2 + 60, 200, 50)
+        self.btn_quit_game = pygame.Rect(SCREEN_WIDTH // 2 + 10, SCREEN_HEIGHT // 2 + 60, 200, 50)
 
         # --- Khởi tạo Player ---
         self.player = Player()
@@ -363,24 +387,16 @@ class Game:
     # -------------------------------------------------------------------------
 
     def run(self):
-        """
-        Vòng lặp chính của game (Game Loop).
-        Chạy liên tục cho đến khi self.running = False.
-
-        Thứ tự mỗi frame:
-            1. Xử lý sự kiện (events)
-            2. Cập nhật logic (update)
-            3. Vẽ lên màn hình (draw)
-            4. Giới hạn FPS
-        """
+        """Vòng lặp chính của game."""
         while self.running:
             self._handle_events()
 
-            if not self.game_over and not self.victory:
-                self._update()
+            if self.state == STATE_PLAYING:
+                if not self.game_over and not self.victory:
+                    self._update()
 
             self._draw()
-            self.clock.tick(FPS)  # Giới hạn tốc độ khung hình
+            self.clock.tick(FPS)
 
         pygame.quit()
         sys.exit()
@@ -390,24 +406,73 @@ class Game:
     # -------------------------------------------------------------------------
 
     def _handle_events(self):
-        """
-        (Private) Đọc và xử lý tất cả sự kiện từ hệ thống:
-        - Đóng cửa sổ → thoát game.
-        - Nhấn ESC → thoát game.
-        - Nhấn R khi Game Over / Win → chơi lại.
-        """
+        """Xử lý sự kiện tùy theo trạng thái game."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
 
             if event.type == pygame.KEYDOWN:
-                # Thoát game bằng phím ESC
                 if event.key == pygame.K_ESCAPE:
-                    self.running = False
+                    if self.state == STATE_PLAYING:
+                        self.state = STATE_MENU
+                    else:
+                        self.running = False
 
-                # Chơi lại khi Game Over hoặc thắng
                 if event.key == pygame.K_r and (self.game_over or self.victory):
                     self._restart()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1: # Left click
+                    self._handle_click(event.pos)
+
+    def _handle_click(self, pos):
+        """Xử lý logic click chuột cho các menu."""
+        if self.state == STATE_PLAYING and (self.game_over or self.victory):
+            if self.btn_restart.collidepoint(pos):
+                self._restart()
+            elif self.btn_quit_game.collidepoint(pos):
+                self.state = STATE_MENU
+
+        elif self.state == STATE_MENU:
+            if self.ui_menu.buttons["play"].collidepoint(pos):
+                self.state = STATE_PLAY_MODE
+            elif self.ui_menu.buttons["leaderboard"].collidepoint(pos):
+                self.state = STATE_LEADERBOARD
+            elif self.ui_menu.buttons["settings"].collidepoint(pos):
+                self.state = STATE_SETTINGS
+            elif self.ui_menu.buttons["quit"].collidepoint(pos):
+                self.running = False
+
+        elif self.state == STATE_PLAY_MODE:
+            if self.ui_play_mode.buttons["story"].collidepoint(pos):
+                self.game_mode = "story"
+                self._restart()
+                self.state = STATE_PLAYING
+            elif self.ui_play_mode.buttons["infinite"].collidepoint(pos):
+                if self.unlocked_infinite:
+                    self.game_mode = "infinite"
+                    self._restart()
+                    self.state = STATE_PLAYING
+            elif self.ui_play_mode.buttons["back"].collidepoint(pos):
+                self.state = STATE_MENU
+
+        elif self.state == STATE_LEADERBOARD:
+            if self.ui_leaderboard.back_button.collidepoint(pos):
+                self.state = STATE_MENU
+
+        elif self.state == STATE_SETTINGS:
+            if self.ui_settings.back_button.collidepoint(pos):
+                self.state = STATE_MENU
+            elif self.ui_settings.buttons["sfx"].collidepoint(pos):
+                self.audio.toggle_sfx()
+            elif self.ui_settings.buttons["music"].collidepoint(pos):
+                self.audio.toggle_music()
+            elif self.ui_settings.buttons["difficulty"].collidepoint(pos):
+                # Placeholder for difficulty toggle
+                pass
+            elif self.ui_settings.buttons["screen"].collidepoint(pos):
+                # Placeholder for screen mode toggle
+                pass
 
     # -------------------------------------------------------------------------
     # CẬP NHẬT LOGIC
@@ -499,7 +564,13 @@ class Game:
                     
                 if enemy.take_damage(damage):
                     score_multiplier = enemy.max_hp
-                    self.score += SCORE_PER_KILL * score_multiplier
+                    points = SCORE_PER_KILL * score_multiplier
+                    
+                    # Áp dụng nhân hệ số cho Infinite Mode
+                    if self.game_mode == "infinite":
+                        points = int(points * (1 + 0.1 * self.wave))
+                        
+                    self.score += points
                     self.audio.play_chicken_exp()
 
 
@@ -534,7 +605,12 @@ class Game:
                     enemy.kill()
             else:
                 self.audio.play_explosion()
-                self.game_over = True
+                self.lives -= 1
+                if self.lives <= 0:
+                    self.game_over = True
+                else:
+                    # Tạm thời reset vị trí player hoặc cho bất tử ngắn hạn
+                    self._respawn_player()
 
 
 
@@ -562,7 +638,20 @@ class Game:
                     egg.kill()
             else:
                 self.audio.play_explosion()
-                self.game_over = True
+                self.lives -= 1
+                for egg in collisions: egg.kill() # Xóa quả trứng đã va chạm
+                if self.lives <= 0:
+                    self.game_over = True
+                else:
+                    self._respawn_player()
+
+    def _respawn_player(self):
+        """Reset vị trí player và cho bất tử tạm thời."""
+        self.player.rect.centerx = SCREEN_WIDTH // 2
+        self.player.rect.bottom = SCREEN_HEIGHT - 70
+        # Thêm hiệu ứng bất tử ngắn hạn (dùng shield tạm thời 2 giây)
+        self.player.apply_powerup("shield")
+        self.player.shield_expire_time = pygame.time.get_ticks() + 2000
 
 
 
@@ -649,33 +738,38 @@ class Game:
         if not self.fleet.is_empty():
             return  # Còn gà → chưa cần xét
 
-        if self.wave >= MAX_WAVES:
+        if self.wave >= MAX_WAVES and self.game_mode == "story":
             # Đã vượt qua tất cả wave → CHIẾN THẮNG
             self.victory = True
+            save_progress(True) # Lưu tiến trình đã hoàn thành story
+            self.unlocked_infinite = True # Update cache
         else:
             # Chuyển sang wave tiếp theo
             self._start_next_wave()
 
     def _start_next_wave(self):
-        """
-        (Private) Chuyển sang wave mới:
-        1. Tăng số wave.
-        2. Xóa toàn bộ đạn còn trên màn hình (dọn dẹp).
-        3. Reset đội hình gà với tốc độ cao hơn.
-        """
+        """(Private) Chuyển sang wave mới."""
         self.wave += 1
 
-        # Xóa hết đạn còn lại trên màn hình
+        # Xóa các sprite cũ
         self.bullets.empty()
-        # Xóa hết trứng còn lại
         self.eggs.empty()
-        # Xóa hết vật phẩm còn lại
         self.powerups.empty()
         self.lasers.empty()
 
-
         # Tăng tốc và tạo lại đội hình mới
         self.fleet.increase_speed()
+        
+        # Logic Infinite Mode: Mỗi 5 wave là Boss, còn lại random
+        if self.game_mode == "infinite":
+            if self.wave % 5 == 0:
+                self.fleet.wave = MAX_WAVES # Giả định MAX_WAVES là wave Boss
+            else:
+                # Random wave từ 1 đến MAX_WAVES-1
+                self.fleet.wave = random.randint(1, MAX_WAVES - 1)
+        else:
+            self.fleet.wave = self.wave
+            
         self.fleet.reset()
 
     # -------------------------------------------------------------------------
@@ -683,12 +777,10 @@ class Game:
     # -------------------------------------------------------------------------
 
     def _restart(self):
-        """
-        (Private) Reset toàn bộ trạng thái về ban đầu để chơi lại.
-        Được gọi khi người chơi nhấn R sau Game Over hoặc chiến thắng.
-        """
+        """(Private) Reset toàn bộ trạng thái về ban đầu để chơi lại."""
         # Reset trạng thái
         self.score     = 0
+        self.lives     = 3
         self.wave      = 1
         self.game_over = False
         self.victory   = False
@@ -715,38 +807,41 @@ class Game:
     # -------------------------------------------------------------------------
 
     def _draw(self):
-        """
-        (Private) Vẽ toàn bộ frame hiện tại lên màn hình.
-        Thứ tự vẽ (painter's algorithm — vẽ đè từ dưới lên):
-            1. Nền đen (xóa frame cũ)
-            2. Vẽ starfield (sao nền)
-            3. Vẽ tất cả sprite
-            4. Vẽ HUD (điểm số, wave)
-            5. Vẽ màn hình Game Over / Win nếu cần
-            6. Flip buffer → hiển thị
-        """
-        # 1. Xóa màn hình bằng màu nền
+        """Vẽ toàn bộ frame hiện tại lên màn hình tùy theo state."""
+        if self.state == STATE_MENU:
+            self.ui_menu.draw(self.screen)
+        elif self.state == STATE_PLAY_MODE:
+            self.ui_play_mode.draw(self.screen, is_unlocked=self.unlocked_infinite)
+        elif self.state == STATE_LEADERBOARD:
+            self.ui_leaderboard.draw(self.screen, scores=get_top_scores())
+        elif self.state == STATE_SETTINGS:
+            self.ui_settings.draw(self.screen, 
+                                  sfx_on=self.audio.sfx_enabled, 
+                                  music_on=self.audio.music_enabled)
+        elif self.state == STATE_PLAYING:
+            self._draw_gameplay()
+
+        pygame.display.flip()
+
+    def _draw_gameplay(self):
+        """Vẽ màn hình khi đang chơi."""
         self.screen.fill(COLOR_BLACK)
-
-        # 2. Vẽ nền sao giả (đơn giản)
         self._draw_starfield()
-
-        # 3. Vẽ tất cả sprite (player, enemies, bullets)
         self.all_sprites.draw(self.screen)
-
-        # 4. Vẽ HUD
-        self._draw_hud()
+        
+        # HUD từ ui.py
+        self.ui_hud.draw(self.screen, self.score, self.lives, self.wave)
         self._draw_powerup_status()
 
+        # Thanh máu boss: chỉ hiển thị khi boss còn sống trên màn hình.
+        boss = self._get_alive_boss()
+        if boss is not None:
+            self._draw_boss_hp_bar(boss)
 
-        # 5. Vẽ màn Game Over hoặc Win nếu cần
         if self.game_over:
             self._draw_game_over_screen()
         elif self.victory:
             self._draw_victory_screen()
-
-        # 6. Cập nhật toàn bộ màn hình (double buffering)
-        pygame.display.flip()
 
     def _draw_starfield(self):
         """
@@ -896,12 +991,9 @@ class Game:
             SCREEN_HEIGHT // 2
         ))
 
-        # Hướng dẫn chơi lại
-        restart_text = self.font_small.render("Nhấn [R] để chơi lại  |  [ESC] để thoát", True, COLOR_ORANGE)
-        self.screen.blit(restart_text, (
-            SCREEN_WIDTH // 2 - restart_text.get_width() // 2,
-            SCREEN_HEIGHT // 2 + 50
-        ))
+        # Nút Chơi lại và Thoát
+        ui.draw_button(self.screen, "RESTART [R]", self.btn_restart, COLOR_GREEN, COLOR_BLACK)
+        ui.draw_button(self.screen, "QUIT [ESC]", self.btn_quit_game, COLOR_RED, COLOR_WHITE)
 
     def _draw_victory_screen(self):
         """
@@ -925,9 +1017,6 @@ class Game:
             SCREEN_HEIGHT // 2
         ))
 
-        # Hướng dẫn
-        restart_text = self.font_small.render("Nhấn [R] để chơi lại  |  [ESC] để thoát", True, COLOR_ORANGE)
-        self.screen.blit(restart_text, (
-            SCREEN_WIDTH // 2 - restart_text.get_width() // 2,
-            SCREEN_HEIGHT // 2 + 50
-        ))
+        # Nút Chơi lại và Thoát
+        ui.draw_button(self.screen, "RESTART [R]", self.btn_restart, COLOR_GREEN, COLOR_BLACK)
+        ui.draw_button(self.screen, "QUIT [ESC]", self.btn_quit_game, COLOR_RED, COLOR_WHITE)
