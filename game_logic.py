@@ -551,8 +551,8 @@ class Game:
             
             if deadly_hits:
                 if self.player.has_shield:
-                    self.player.has_shield = False
-                    self.player.shield_expire_time = 0
+                    # Tắt việc phá khiên lập tức để tránh loop chết liên tục (instant kill)
+                    # Khiên sẽ tiếp tục bảo vệ người chơi cho đến khi hết thời gian
                     self.audio.play_explosion()
                 else:
                     self.audio.play_explosion()
