@@ -1,18 +1,11 @@
-# =============================================================================
-# FILE: ui.py
-#
-# MÔ TẢ:
-#   Thiết kế và vẽ các màn hình (Menu, Leaderboard, Settings, HUD), căn chỉnh layout UI và dùng mock data cho Leaderboard.
-# QUY TẮC:
-#   - Không hardcode màu/font size → lấy từ settings.py
-#   - Chỉ xử lý UI, không chứa logic game
-# =============================================================================
+# FILE: ui.py - Thiết kế và hiển thị giao diện người dùng (Menu, HUD, v.v.)
+
 
 import pygame
 import settings
 import random
 
-# ================= FONT CONFIG =================
+# --- CẤU HÌNH FONT ---
 FONT_SMALL  = getattr(settings, "FONT_SMALL", 20)
 FONT_MEDIUM = getattr(settings, "FONT_MEDIUM", 28)
 FONT_LARGE  = getattr(settings, "FONT_LARGE", 44)
@@ -24,7 +17,7 @@ def get_font(size):
         _font_cache[size] = pygame.font.SysFont("Courier New", size, bold=True)
     return _font_cache[size]
 
-# ================= TEXT DRAW =================
+# --- HIỂN THỊ CHỮ ---
 def draw_text(surface, text, size, color, x, y, center=True):
     font = get_font(size)
     text_surface = font.render(text, True, color)
@@ -37,22 +30,18 @@ def draw_text(surface, text, size, color, x, y, center=True):
 
     surface.blit(text_surface, rect)
 
-# ================= BUTTON =================
+# --- NÚT BẤM (BUTTON) ---
 def draw_button(surface, text, rect, color_bg, color_text, is_locked=False):
     mouse_pos = pygame.mouse.get_pos()
     is_hovered = rect.collidepoint(mouse_pos) and not is_locked
 
-    # ===== Hover scale =====
     display_rect = rect.inflate(6, 6) if is_hovered else rect
-
-    # ===== Neon color =====
     neon_color = (0, 255, 255)
     if is_locked:
         neon_color = (100, 100, 100)
     elif text == "QUIT":
         neon_color = (255, 50, 50)
 
-    # ===== Background color =====
     if is_locked:
         bg_color = (30, 30, 30)
     else:
@@ -70,15 +59,12 @@ def draw_button(surface, text, rect, color_bg, color_text, is_locked=False):
         (x, y + h - v), (x, y + v)
     ]
 
-    # ===== Background =====
     btn_surf = pygame.Surface((w, h), pygame.SRCALPHA).convert_alpha()
-
     pygame.draw.polygon(
         btn_surf,
         (*bg_color, 200),
         [(p[0] - x, p[1] - y) for p in points]
     )
-
     surface.blit(btn_surf, (x, y))
 
     # ===== Border =====
@@ -94,7 +80,6 @@ def draw_button(surface, text, rect, color_bg, color_text, is_locked=False):
         [(x + w - v - 15, y + h), (x + w - v, y + h),
          (x + w, y + h - v), (x + w, y + h - v - 15)], 3)
 
-    # ===== Text (FIX FONT HARD CODE nếu muốn sau) =====
     display_text = text
     text_color = highlight
     if is_locked:
@@ -110,7 +95,7 @@ def draw_button(surface, text, rect, color_bg, color_text, is_locked=False):
         display_rect.centery
     )
     
-# ================= STAR BACKGROUND =================
+# --- NỀN SAO ---
 class StarBackground:
     def __init__(self, count=50):
         self.stars = [{
@@ -130,7 +115,7 @@ class StarBackground:
             pygame.draw.circle(surface, settings.COLOR_WHITE,
                                (int(star["x"]), int(star["y"])), 1)
 
-# ================= MAIN MENU =================
+# --- MÀN HÌNH CHÍNH ---
 class MainMenuScreen:
     def __init__(self):
         self.stars = StarBackground()
@@ -158,7 +143,7 @@ class MainMenuScreen:
         draw_button(surface, "SETTINGS", self.buttons["settings"], settings.COLOR_WHITE, settings.COLOR_BLACK)
         draw_button(surface, "QUIT", self.buttons["quit"], settings.COLOR_RED, settings.COLOR_WHITE)
 
-# ================= LEADERBOARD =================
+# --- BẢNG XẾP HẠNG ---
 class LeaderboardScreen:
     def __init__(self):
         self.stars = StarBackground(40)
@@ -197,15 +182,14 @@ class LeaderboardScreen:
             y = start_y + 85 + (i * row_gap)
 
             if i == 0:
-                color = settings.COLOR_YELLOW   # fake gold
+                color = settings.COLOR_YELLOW
             elif i == 1:
-                color = settings.COLOR_WHITE    # fake silver
+                color = settings.COLOR_WHITE
             elif i == 2:
-                color = settings.COLOR_ORANGE   # fake bronze
+                color = settings.COLOR_ORANGE
             else:
                 color = settings.COLOR_WHITE
 
-            # Handle various score types (int, string, special symbols)
             if isinstance(score, int):
                 score_display = f"{score:,}"
             else:
@@ -219,7 +203,7 @@ class LeaderboardScreen:
             draw_text(surface, score_display, FONT_MEDIUM - 5,
                       settings.COLOR_GREEN, col_score, y)
 
-# ================= MODE SELECT =================
+# --- CHỌN CHẾ ĐỘ CHƠI ---
 class PlayModeScreen:
     def __init__(self):
         # nền sao (giống menu cho đồng bộ)
@@ -235,11 +219,9 @@ class PlayModeScreen:
         }
 
     def draw(self, surface, is_unlocked=False):
-        # nền + hiệu ứng sao
         surface.fill(settings.COLOR_BLACK)
         self.stars.update_and_draw(surface)
 
-        # title
         draw_text(
             surface,
             "CHOOSE MODE",
@@ -275,7 +257,7 @@ class PlayModeScreen:
             settings.COLOR_WHITE
         )
         
-# ================= SETTINGS =================
+# --- CÀI ĐẶT ---
 class SettingsScreen:
     def __init__(self):
         self.stars = StarBackground(30)
@@ -320,7 +302,7 @@ class SettingsScreen:
         draw_button(surface, mode_text, self.buttons["screen"], 
                     (50, 150, 150), settings.COLOR_WHITE)
 
-# ================= HUD =================
+# --- GIAO DIỆN TRONG GAME (HUD) ---
 class HUD:
     def draw(self, surface, score, lives, wave):
         draw_text(surface, f"SCORE: {score}", FONT_SMALL,

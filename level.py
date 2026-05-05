@@ -1,11 +1,5 @@
-# =============================================================================
-# FILE: levels.py
-# MÔ TẢ: Dữ liệu và thuật toán sinh tọa độ (x, y) — tâm sprite — cho đàn gà
-#         theo từng Wave. Không chứa Pygame hay lệnh vẽ.
-#
-# Wave 1: zig-zag  |  Wave 2: tam giác  |  Wave 3: hình thoi
-# Wave 4: trái tim   |  Wave 5: không gà con (boss — game_logic)
-# =============================================================================
+# FILE: levels.py - Dữ liệu và thuật toán sinh tọa độ cho đàn gà.
+
 
 from __future__ import annotations
 
@@ -30,7 +24,7 @@ def _margin_x() -> int:
 
 
 def _formation_bottom_cap() -> int:
-    """Cùng công thức với `_play_y_bounds` — clamp không thu nhỏ đội hình tim/thoi."""
+    """Giới hạn dưới của đội hình."""
     return min(SCREEN_HEIGHT // 2 + 130, SCREEN_HEIGHT - 85)
 
 
@@ -113,7 +107,7 @@ def _pattern_triangle(count: int) -> list[tuple[int, int]]:
 
 
 def _heart_xy(t: float) -> tuple[float, float]:
-    """Đường cong trái tim cổ điển (tham số t ∈ [0, 2π]). Trục y toán học hướng lên."""
+    """Đường cong trái tim cổ điển."""
     st = math.sin(t)
     x = 16.0 * st**3
     y = (
@@ -183,15 +177,15 @@ def _sample_polyline_arc_length(
 
 
 def _pattern_heart(count: int) -> list[tuple[int, int]]:
-    """Wave 3 — 1 Trái tim xếp theo grid (đã ép size, rỗng ruột có tim nhỏ bên trong)."""
+    """Tạo đội hình hình trái tim."""
     
     heart_map = [
         "  ##   ##  ",
         " #  # #  # ",
         "#    #    #",
-        "#  #   #  #", # <-- CHÚ THÍCH: Thêm 2 '#' làm 2 đỉnh tim nhỏ
-        " #  # #  # ", # <-- CHÚ THÍCH: Thêm 2 '#' làm viền tim nhỏ
-        "  #  #  #  ", # <-- CHÚ THÍCH: Thêm 1 '#' làm chóp dưới tim nhỏ
+        "#  #   #  #",
+        " #  # #  # ",
+        "  #  #  #  ",
         "   #   #   ",
         "    # #    ",
         "     #     "
@@ -277,11 +271,10 @@ def _rhombus_fit_to_screen(
 
 
 def _pattern_rhombus(count: int) -> list[tuple[int, int]]:
-    """Wave 4 — Ba hình thoi: Trái, Phải và một hình nhỏ ở Giữa."""
+    """Tạo đội hình hình thoi."""
     if count < 1:
         return []
     
-    # Chia gà cho 3 phần: Trái, Phải (~40% mỗi bên), Giữa (~20%)
     c_side = int(count * 0.4)
     c_mid = count - 2 * c_side
     if c_mid < 4: c_mid = 4
@@ -294,21 +287,18 @@ def _pattern_rhombus(count: int) -> list[tuple[int, int]]:
     
     out_pts: list[tuple[int, int]] = []
     
-    # --- Hình thoi 1 (bên trái) ---
     cx1 = SCREEN_WIDTH * 0.22
     rw1 = (c_side * gap) / 6.0
     rh1 = rw1 * aspect
     verts1 = [(cx1, cy - rh1), (cx1 + rw1, cy), (cx1, cy + rh1), (cx1 - rw1, cy)]
     out_pts.extend([_clamp_xy(px, py) for px, py in _even_on_closed_polygon(verts1, c_side)])
     
-    # --- Hình thoi 2 (bên phải) ---
     cx2 = SCREEN_WIDTH * 0.78
     rw2 = (c_side * gap) / 6.0
     rh2 = rw2 * aspect
     verts2 = [(cx2, cy - rh2), (cx2 + rw2, cy), (cx2, cy + rh2), (cx2 - rw2, cy)]
     out_pts.extend([_clamp_xy(px, py) for px, py in _even_on_closed_polygon(verts2, c_side)])
 
-    # --- Hình thoi 3 (ở giữa - nhỏ hơn) ---
     cxM = SCREEN_WIDTH / 2.0
     rwM = (c_mid * gap) / 6.0
     rhM = rwM * aspect
@@ -319,16 +309,7 @@ def _pattern_rhombus(count: int) -> list[tuple[int, int]]:
 
 
 def get_wave_pattern(wave_num: int) -> list[tuple[int, int]]:
-    """Trả về list tọa độ (x, y) tâm sprite cho **gà con** trong wave.
-
-    - Wave 1: zig-zag
-    - Wave 2: tam giác
-    - Wave 3: hình thoi
-    - Wave 4: trái tim
-    - Wave 5+ (``>= MAX_WAVES``): [] — boss ở ``game_logic``.
-
-    Wave 6+ (nếu mở rộng): lặp lại 1→4.
-    """
+    """Trả về danh sách tọa độ (x, y) cho gà con trong wave."""
     if wave_num < 1:
         wave_num = 1
 
