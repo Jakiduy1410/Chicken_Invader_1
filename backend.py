@@ -8,7 +8,6 @@ SCORE_FILE = os.path.join(DATA_FOLDER, "high_scores.json")
 PROGRESS_FILE = os.path.join(DATA_FOLDER, "progress.json")
 AUDIO_FOLDER = "assets/audio"
 
-# Tự động tạo thư mục nếu chưa có
 for folder in [DATA_FOLDER, AUDIO_FOLDER]:
     if not os.path.exists(folder):
         os.makedirs(folder)
@@ -23,7 +22,6 @@ def save_score(name: str, score: int) -> None:
         val = x.get('score', 0)
         if isinstance(val, int):
             return val
-        # Nếu là string như "100kg", thử lấy số ra
         import re
         nums = re.findall(r'\d+', str(val))
         if nums:
@@ -36,7 +34,7 @@ def save_score(name: str, score: int) -> None:
     print(f"✅ Đã lưu điểm cho {name}")
 
 def get_top_scores(limit: int = 10) -> list[tuple[str, int]]:
-    """Trả về top điểm cao cho Dev 4."""
+    """Trả về danh sách top điểm cao."""
     scores = _load_raw_data()
     return [(item['name'], item['score']) for item in scores[:limit]]
 
@@ -67,6 +65,7 @@ def is_story_finished() -> bool:
 
 # --- QUẢN LÝ ÂM THANH ---
 class AudioManager:
+    """Hệ thống quản lý âm thanh và nhạc nền cho game."""
     def __init__(self):
         if not pygame.mixer.get_init():
             pygame.mixer.init()
@@ -75,7 +74,7 @@ class AudioManager:
         self.music_enabled = True
 
     def load_resources(self):
-        """Tải các tệp âm thanh. Mỗi tệp được tải riêng để tránh lỗi nếu thiếu 1 file."""
+        """Tải các tệp âm thanh SFX và nhạc nền."""
         sounds_to_load = {
             "shoot": "shoot.mp3",
             "explosion": "explosion.mp3",
@@ -88,14 +87,9 @@ class AudioManager:
             if os.path.exists(path):
                 try:
                     self.sfx[key] = pygame.mixer.Sound(path)
-                    # print(f"✅ Đã tải: {filename}")
                 except Exception as e:
                     print(f"❌ Lỗi khi tải {filename}: {e}")
-            else:
-                # print(f"⚠️ Không tìm thấy: {filename}")
-                pass
         
-        # Load nhạc nền (Music)
         bgm_path = os.path.join(AUDIO_FOLDER, "background.mp3")
         if os.path.exists(bgm_path):
             try:
@@ -149,14 +143,12 @@ class AudioManager:
             
         
 if __name__ == "__main__":
-    # Khởi tạo pygame để test âm thanh
     pygame.init() 
     
     audio = AudioManager()
     audio.load_resources()
     
-    print("Đang test nhạc nổ...")
+    print("Đang test âm thanh...")
     audio.play_boss_lazer()
     
-    # Giữ chương trình chạy trong 5 giây để nghe nhạc
     pygame.time.delay(5000)

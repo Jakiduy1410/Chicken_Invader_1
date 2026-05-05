@@ -1,66 +1,60 @@
-# =============================================================================
-# FILE: settings.py
-# MÔ TẢ: Chứa toàn bộ hằng số cấu hình cho game Chicken Invaders.
-#         Mọi thành viên trong team khi cần thay đổi thông số (tốc độ, màu sắc,
-#         kích thước màn hình...) đều chỉ cần chỉnh sửa tại file này.
-# NGƯỜI PHỤ TRÁCH: [Tên thành viên phụ trách cấu hình]
-# =============================================================================
+# FILE: settings.py - Cấu hình hệ thống game.
+
 
 # --- CẤU HÌNH MÀN HÌNH ---
-SCREEN_WIDTH  = 900   # Chiều rộng cửa sổ game (pixel)
-SCREEN_HEIGHT = 700   # Chiều cao cửa sổ game (pixel)
-TITLE         = "Chicken Invaders - Team Project"  # Tiêu đề cửa sổ
-FPS           = 60    # Số khung hình mỗi giây (Frames Per Second)
+SCREEN_WIDTH  = 900
+SCREEN_HEIGHT = 700
+TITLE         = "Chicken Invaders - Team Project"
+FPS           = 60
 
 # --- BẢNG MÀU (RGB) ---
-# Sử dụng các hằng số màu thay vì hardcode để dễ thay đổi theme sau này
-COLOR_BLACK      = (0,   0,   0)    # Màu nền
-COLOR_WHITE      = (255, 255, 255)  # Màu chữ thông thường
-COLOR_GREEN      = (0,   220, 80)   # Màu Player (máy bay)
-COLOR_RED        = (220, 50,  50)   # Màu Enemy (gà)
-COLOR_YELLOW     = (255, 220, 0)    # Màu Bullet (đạn)
-COLOR_DARK_GREEN = (0,   150, 50)   # Màu viền Player
-COLOR_DARK_RED   = (150, 20,  20)   # Màu viền Enemy
-COLOR_ORANGE     = (255, 140, 0)    # Màu chữ Score / UI
-COLOR_PURPLE     = (128, 0, 128)    # Màu tím
-COLOR_PINK       = (255, 105, 180)  # Màu hồng
-COLOR_BLUE       = (0, 150, 255)  # Màu Power-up
-COLOR_LIGHT_BLUE = (173, 216, 230)  # Màu viền Power-up
-COLOR_GREY       = (80,  80,  80)   # Màu bùa hại (Cursed)
+COLOR_BLACK      = (0,   0,   0)
+COLOR_WHITE      = (255, 255, 255)
+COLOR_GREEN      = (0,   220, 80)
+COLOR_RED        = (220, 50,  50)
+COLOR_YELLOW     = (255, 220, 0)
+COLOR_DARK_GREEN = (0,   150, 50)
+COLOR_DARK_RED   = (150, 20,  20)
+COLOR_ORANGE     = (255, 140, 0)
+COLOR_PURPLE     = (128, 0, 128)
+COLOR_PINK       = (255, 105, 180)
+COLOR_BLUE       = (0, 150, 255)
+COLOR_LIGHT_BLUE = (173, 216, 230)
+COLOR_GREY       = (80,  80,  80)
 
-# --- CẤU HÌNH PLAYER (Máy bay người chơi) ---
-PLAYER_WIDTH      = 50    # Chiều rộng frame gốc
-PLAYER_HEIGHT     = 40    # Chiều cao frame gốc
-PLAYER_SCALE      = 1.5   # Hệ số phóng to Player (Chỉnh cái này để máy bay to lên)
-PLAYER_SPEED      = 6     # Tốc độ di chuyển ngang (pixel/frame)
-PLAYER_START_X    = SCREEN_WIDTH // 2   # Vị trí X xuất phát (giữa màn hình)
-PLAYER_START_Y    = SCREEN_HEIGHT - 70  # Vị trí Y xuất phát (gần đáy màn hình)
+# --- CẤU HÌNH PLAYER ---
+PLAYER_WIDTH      = 50
+PLAYER_HEIGHT     = 40
+PLAYER_SCALE      = 1.5
+PLAYER_SPEED      = 6
+PLAYER_START_X    = SCREEN_WIDTH // 2
+PLAYER_START_Y    = SCREEN_HEIGHT - 70
 
-# --- CẤU HÌNH BULLET (Đạn) ---
-BULLET_WIDTH  = 5     # Chiều rộng viên đạn (pixel)
-BULLET_HEIGHT = 14    # Chiều cao viên đạn (pixel)
-BULLET_SPEED  = 10    # Tốc độ đạn bay lên (pixel/frame, giá trị dương = đi lên)
-BULLET_COOLDOWN = 300 # Thời gian hồi chiêu bắn mặc định (milliseconds)
-RAPID_FIRE_COOLDOWN = 100 # Thời gian hồi chiêu khi có power-up rapid_fire
-BULLET_DAMAGE = 1      # Sát thương đạn thường
-BULLET_PIERCE_DAMAGE = 2 # Sát thương đạn xuyên (pierce)
+# --- CẤU HÌNH BULLET ---
+BULLET_WIDTH  = 5
+BULLET_HEIGHT = 14
+BULLET_SPEED  = 10
+BULLET_COOLDOWN = 300
+RAPID_FIRE_COOLDOWN = 100
+BULLET_DAMAGE = 1
+BULLET_PIERCE_DAMAGE = 2
 
-# --- CẤU HÌNH EGG (Trứng gà) ---
-EGG_WIDTH  = 40     # Chiều rộng trứng (pixel)
-EGG_HEIGHT = 40    # Chiều cao trứng (pixel)
-EGG_SPEED  = 3     # Tốc độ trứng bay xuống (Giảm từ 5 -> 3 cho dễ)
-EGG_DROP_COUNT = 3 # Số lượng trứng thả mỗi lượt (Giảm từ 6 -> 3)
-EGG_DROP_CHANCE = 0.7 # Tỉ lệ thả trứng mỗi khi chạm biên (70%)
+# --- CẤU HÌNH EGG ---
+EGG_WIDTH  = 40
+EGG_HEIGHT = 40
+EGG_SPEED  = 3
+EGG_DROP_COUNT = 3
+EGG_DROP_CHANCE = 0.7
 
-# --- CẤU HÌNH POWER-UP (Vật phẩm tăng sức mạnh) ---
-POWERUP_WIDTH  = 30    # Chiều rộng vật phẩm (pixel)
-POWERUP_HEIGHT = 30    # Chiều cao vật phẩm (pixel)
-POWERUP_SPEED  = 4     # Tốc độ rơi (pixel/frame)
-POWERUP_DROP_RATE = 0.15 # Tỉ lệ rơi vật phẩm khi gà bị tiêu diệt (15%)
-POWERUP_DURATION_BOOST = 7000 # Thời gian hiệu lực của Power-up thường (7 giây)
-POWERUP_DURATION_SHIELD = 10000 # Thời gian hiệu lực của Khiên (10 giây)
+# --- CẤU HÌNH POWER-UP ---
+POWERUP_WIDTH  = 30
+POWERUP_HEIGHT = 30
+POWERUP_SPEED  = 4
+POWERUP_DROP_RATE = 0.15
+POWERUP_DURATION_BOOST = 7000
+POWERUP_DURATION_SHIELD = 10000
 
-POWERUP_TYPES = {        # Các loại power-up và màu sắc tương ứng
+POWERUP_TYPES = {
     "pierce":      COLOR_RED,
     "triple_shot": COLOR_GREEN,
     "shield":      COLOR_YELLOW,
@@ -69,14 +63,14 @@ POWERUP_TYPES = {        # Các loại power-up và màu sắc tương ứng
     "cursed":      COLOR_GREY
 }
 
-# --- CẤU HÌNH ENEMY (Đàn gà) ---
-ENEMY_WIDTH   = 80    # Chiều rộng sprite Enemy (pixel)
-ENEMY_HEIGHT  = 80    # Chiều cao sprite Enemy (pixel)
-BOSS_WIDTH    = 100   # Chiều rộng khung hình trong sheet
-BOSS_HEIGHT   = 100   # Chiều cao khung hình trong sheet
-BOSS_SCALE    = 2.5   # Hệ số phóng to Boss (Chỉnh cái này để Boss to lên)
-ENEMY_SPEED_X = 1.5   # Tốc độ di chuyển ngang ban đầu (pixel/frame)
-ENEMY_DROP_Y  = 10    # Khoảng cách hạ xuống khi chạm biên (pixel)
+# --- CẤU HÌNH ENEMY ---
+ENEMY_WIDTH   = 80
+ENEMY_HEIGHT  = 80
+BOSS_WIDTH    = 100
+BOSS_HEIGHT   = 100
+BOSS_SCALE    = 2.5
+ENEMY_SPEED_X = 1.5
+ENEMY_DROP_Y  = 10
 
 # 4 loại gà con theo máu + 1 boss
 ENEMY_HP_BY_TYPE = {
@@ -87,12 +81,12 @@ ENEMY_HP_BY_TYPE = {
     "boss": 200,
 }
 
-# --- CẤU HÌNH ĐỘI HÌNH GÀ (Grid Formation) ---
-ENEMY_ROWS      = 3   # Số hàng gà
-ENEMY_COLS      = 8   # Số cột gà
-ENEMY_H_SPACING = 75  # Khoảng cách ngang giữa các con gà (pixel)
-ENEMY_V_SPACING = 60  # Khoảng cách dọc giữa các con gà (pixel)
-ENEMY_GRID_TOP  = 60  # Vị trí Y của hàng gà đầu tiên tính từ đỉnh màn hình
+# --- ĐỘI HÌNH GÀ ---
+ENEMY_ROWS      = 3
+ENEMY_COLS      = 8
+ENEMY_H_SPACING = 75
+ENEMY_V_SPACING = 60
+ENEMY_GRID_TOP  = 60
 
 # --- CẤU HÌNH LEVEL / SÓNG (Wave) ---
 SPEED_INCREMENT = 0.4  # Mức tăng tốc độ gà sau mỗi wave mới

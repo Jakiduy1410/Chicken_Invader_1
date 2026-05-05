@@ -1,13 +1,5 @@
-# =============================================================================
-# FILE: game_logic.py
-# MÔ TẢ: Trung tâm điều phối logic game — "bộ não" của toàn bộ project.
-#         Class Game quản lý: vòng lặp chính, đội hình gà (EnemyFleet),
-#         va chạm, điểm số, chuyển Wave, và trạng thái Game Over / Win.
-#
-# PHÂN CÔNG TEAM:
-#   - Class EnemyFleet → Dev phụ trách đội hình & chuyển động gà
-#   - Class Game       → Dev phụ trách va chạm, level, và UI điểm số
-# =============================================================================
+# FILE: game_logic.py - Trung tâm điều phối logic game.
+
 
 import pygame
 import sys
@@ -23,9 +15,8 @@ import ui
 # Đường dẫn tới thư mục ảnh
 ASSETS_IMAGES_DIR = Path(__file__).resolve().parent / "assets" / "image"
 
-# =============================================================================
-# GAME STATES
-# =============================================================================
+# --- TRẠNG THÁI GAME ---
+
 STATE_MENU        = "MENU"
 STATE_PLAY_MODE   = "PLAY_MODE"
 STATE_PLAYING     = "PLAYING"
@@ -34,12 +25,8 @@ STATE_SETTINGS    = "SETTINGS"
 
 
 
-# =============================================================================
-# CLASS: EnemyFleet
-# MÔ TẢ: Quản lý toàn bộ đội hình gà (grid formation).
-#         Điều phối chuyển động đồng bộ: ngang → chạm biên → hạ xuống → đổi chiều.
-# =============================================================================
 class EnemyFleet:
+    """Quản lý đội hình gà và chuyển động đồng bộ."""
     def __init__(self, all_sprites_group, enemies_group, eggs_group, wave=1):
         """
         Khởi tạo đội hình gà dạng lưới (rows × cols).
@@ -63,22 +50,18 @@ class EnemyFleet:
         self.last_egg_drop_time = 0 # Thời điểm thả trứng gần nhất
         self.boss_initial_y = 100 # Vị trí ban đầu mặc định của Boss
 
+        # Thông số thả trứng (mặc định lấy từ settings)
+        self.egg_drop_count = EGG_DROP_COUNT
+        self.egg_drop_cooldown = 1500 # ms (1.5s)
+
         # Tạo đội hình lần đầu
         self.wave = wave
         coords = get_wave_pattern(self.wave)
         self._spawn_fleet(pattern_coords=coords)
 
     def _spawn_fleet(self, pattern_coords=None):
-        """
-        Sinh đội hình gà.
-        - Nếu pattern_coords được cung cấp (từ level.py), dùng tọa độ đó.
-        - Nếu không (mặc định), tự tính lưới hoặc sinh Boss.
-        """
-        # 1. Nếu có tọa độ từ level.py, dùng luôn cho gà con
-        # Offset để cả đội hình "bay xuống" đồng bộ
+        """Sinh đội hình gà dựa trên tọa độ mẫu hoặc mặc định."""
         spawn_offset_y = -450 
-        
-        # Tốc độ trượt: Wave 2 chậm hơn (1.5), các wave khác 3.0
         wave_slide_speed = 1.5 if self.wave == 2 else 3.0
 
         if pattern_coords:
@@ -86,16 +69,13 @@ class EnemyFleet:
                 type_cycle = ["chick_1", "chick_2", "chick_3", "chick_4"]
                 enemy_type = type_cycle[i % len(type_cycle)]
                 hp = ENEMY_HP_BY_TYPE[enemy_type]
-                # Gà được tạo ở vị trí (px, py - offset) nhưng có target là (px, py)
                 enemy = Enemy(px, py + spawn_offset_y, enemy_type=enemy_type, hp=hp, slide_speed=wave_slide_speed)
                 enemy.target_y = py
                 self.all_sprites.add(enemy)
                 self.enemies.add(enemy)
             return
 
-        # 2. Logic dự phòng hoặc cho Boss
         boss_render_h = int(BOSS_HEIGHT * BOSS_SCALE)
-        
         if self.wave == MAX_WAVES:
             current_grid_top = -150 
             boss_offset_y = boss_render_h + 20
@@ -103,22 +83,20 @@ class EnemyFleet:
             current_grid_top = ENEMY_GRID_TOP
             boss_offset_y = 0
 
-        # Nếu không có pattern từ level.py, sinh 1 boss ở wave cuối
         if self.wave == MAX_WAVES:
             final_boss_y = current_grid_top + (boss_render_h // 2)
             self.boss_initial_y = final_boss_y
             boss = Enemy(
                 SCREEN_WIDTH // 2,
-                final_boss_y + spawn_offset_y, # Cũng áp dụng offset cho boss
+                final_boss_y + spawn_offset_y,
                 enemy_type="boss",
                 hp=ENEMY_HP_BY_TYPE["boss"],
-                slide_speed=3.0 # Boss bay xuống bình thường
+                slide_speed=3.0
             )
             boss.target_y = final_boss_y
             self.all_sprites.add(boss)
             self.enemies.add(boss)
         else:
-            # Fallback lưới nếu level.py trả về [] (không nên xảy ra trừ khi cấu hình sai)
             total_grid_width  = (ENEMY_COLS - 1) * ENEMY_H_SPACING
             start_x = (SCREEN_WIDTH - total_grid_width) // 2
             for row in range(ENEMY_ROWS):
@@ -156,28 +134,16 @@ class EnemyFleet:
         self._spawn_fleet(pattern_coords=coords)
 
     def update(self):
-        """
-        Gọi mỗi frame. Điều phối chuyển động toàn đội hình:
-        1. Di chuyển tất cả gà sang trái hoặc phải.
-        2. Phát hiện khi bất kỳ con gà nào chạm biên màn hình.
-        3. Nếu chạm biên: đảo hướng và hạ toàn đội hình xuống.
-
-        Trả về:
-            bool: True nếu đội hình đã hạ xuống quá thấp (Player thua).
-        """
-        # Cờ báo có cần đổi chiều không
+        """Điều phối chuyển động toàn đội hình."""
         should_reverse = False
 
         for enemy in self.enemies:
-            # Di chuyển ngang theo hướng hiện tại
             enemy.rect.x += self.speed_x * self.direction
 
-            # Kiểm tra chạm biên PHẢI
             if enemy.rect.right > SCREEN_WIDTH:
                 should_reverse = True
-                break  # Chỉ cần 1 con chạm là đủ để đổi chiều
+                break
 
-            # Kiểm tra chạm biên TRÁI
             if enemy.rect.left < 0:
                 should_reverse = True
                 break
@@ -185,28 +151,20 @@ class EnemyFleet:
         if should_reverse:
             self._reverse_and_drop()
 
-        # Kiểm tra xem đội hình có hạ xuống quá thấp chưa (gà chạm vùng Player)
         for enemy in self.enemies:
             if enemy.rect.bottom >= SCREEN_HEIGHT - 60:
-                return True  # Báo hiệu Game Over
+                return True
 
-        return False  # Đội hình vẫn trong giới hạn an toàn
+        return False
 
     def _reverse_and_drop(self):
-        """
-        (Private) Đảo chiều di chuyển và hạ toàn bộ đội hình xuống một bậc.
-        Đồng thời đẩy tất cả gà về phía trong màn hình để tránh bị kẹt ở biên.
-        Sau đó, chọn ngẫu nhiên một số gà để thả trứng.
-        """
-        self.direction *= -1  # Đảo chiều: +1 → -1 hoặc ngược lại
+        """Đảo chiều di chuyển và hạ toàn bộ đội hình xuống một bậc."""
+        self.direction *= -1 
 
         if self.enemies:
             lowest_y = max(e.target_y for e in self.enemies)
             highest_y = min(e.target_y for e in self.enemies)
-            
-            # 1/3 cách đáy tương đương với 2/3 màn hình (khoảng 460-500px)
             bounce_threshold = SCREEN_HEIGHT * 0.6 
-            # Giới hạn trên: không để con cao nhất bay quá xa màn hình
             top_threshold = 50 
             
             if lowest_y >= bounce_threshold:
@@ -215,43 +173,45 @@ class EnemyFleet:
                 self.v_direction = 1
 
         for enemy in self.enemies:
-            # Chỉ cập nhật target_y để cả đội hình "trượt" xuống từ từ trong Enemy.update
             if hasattr(enemy, "target_y"):
                 enemy.target_y += self.v_direction * ENEMY_DROP_Y
             else:
-                # Nếu không có target_y (đề phòng), hạ ngay lập tức
                 enemy.rect.y += self.v_direction * ENEMY_DROP_Y
 
-            # Đẩy gà vào trong màn hình nếu vẫn đang tràn ra ngoài
             if enemy.rect.right > SCREEN_WIDTH:
                 enemy.rect.right = SCREEN_WIDTH
             if enemy.rect.left < 0:
                 enemy.rect.left = 0
 
-        # Thả trứng: chỉ thả nếu đạt tỉ lệ EGG_DROP_CHANCE và hết cooldown
         now = pygame.time.get_ticks()
-        if now - self.last_egg_drop_time > 1500: # Cooldown 1.5 giây
+        if now - self.last_egg_drop_time > self.egg_drop_cooldown:
             if random.random() < EGG_DROP_CHANCE:
                 self.last_egg_drop_time = now
-                if len(self.enemies) >= EGG_DROP_COUNT:
-                    droppers = random.sample(list(self.enemies), EGG_DROP_COUNT)
-                else:
-                    droppers = list(self.enemies)  # Nếu ít gà hơn, thả tất cả
+                droppers = random.sample(list(self.enemies), min(len(self.enemies), self.egg_drop_count))
         
                 for enemy in droppers:
                     egg = Egg(enemy.rect.centerx, enemy.rect.bottom)
                     self.all_sprites.add(egg)
                     self.eggs.add(egg)
 
-    def increase_speed(self, increment=SPEED_INCREMENT):
+    def increase_speed(self, increment=SPEED_INCREMENT, game_mode="story"):
         """
         Tăng tốc độ đội hình — gọi khi bắt đầu wave mới.
 
         Tham số:
             increment (float): Lượng tăng thêm (mặc định lấy từ settings.py).
+            game_mode (str): Chế độ chơi ("story" hoặc "infinite").
         """
         self.speed_x += increment
         self.wave += 1
+
+        # Cập nhật thông số thả trứng cho Infinite Mode
+        if game_mode == "infinite":
+            self.egg_drop_count = EGG_DROP_COUNT + (self.wave - 1) // 5
+            self.egg_drop_cooldown = max(300, 1500 - (self.wave - 1) * 50)
+        else:
+            self.egg_drop_count = EGG_DROP_COUNT
+            self.egg_drop_cooldown = 1500
 
     def is_empty(self):
         """
@@ -282,12 +242,8 @@ class EnemyFleet:
         self._spawn_fleet(pattern_coords=coords)
 
 
-# =============================================================================
-# CLASS: Game
-# MÔ TẢ: Lớp trung tâm điều phối toàn bộ game.
-#         Quản lý: vòng lặp game, sự kiện, va chạm, điểm số, wave, HUD.
-# =============================================================================
 class Game:
+    """Lớp trung tâm điều phối toàn bộ game."""
 
     def __init__(self):
         """
@@ -299,62 +255,42 @@ class Game:
         - Thiết lập điểm số và trạng thái ban đầu.
         """
         pygame.init()
-
-        # --- Cửa sổ game ---
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption(TITLE)
-
-        # --- Clock để giới hạn FPS ---
         self.clock = pygame.time.Clock()
 
-        # --- Font chữ cho HUD (Heads-Up Display) ---
         self.font_large  = pygame.font.SysFont("consolas", 36, bold=True)
         self.font_medium = pygame.font.SysFont("consolas", 24)
         self.font_small  = pygame.font.SysFont("consolas", 18)
 
-        # --- UI Screens ---
         self.ui_menu        = ui.MainMenuScreen()
         self.ui_leaderboard = ui.LeaderboardScreen()
         self.ui_play_mode   = ui.PlayModeScreen()
         self.ui_settings    = ui.SettingsScreen()
         self.ui_hud         = ui.HUD()
 
-        # --- Sprite Groups ---
-        # Group chứa TẤT CẢ sprite — dùng LayeredUpdates để quản lý lớp vẽ (layer)
         self.all_sprites = pygame.sprite.LayeredUpdates()
-        # Group riêng cho Enemy — dùng để kiểm tra va chạm đạn-gà
         self.enemies     = pygame.sprite.Group()
-        # Group riêng cho Bullet — dùng để kiểm tra va chạm đạn-gà và gà-player
         self.bullets     = pygame.sprite.Group()
-        # Group riêng cho Egg — dùng để kiểm tra va chạm trứng-player
         self.eggs        = pygame.sprite.Group()
-        # Group riêng cho PowerUp — dùng để kiểm tra va chạm vật phẩm-player
         self.powerups    = pygame.sprite.Group()
-        # Group riêng cho Laser của Boss
         self.lasers      = pygame.sprite.Group()
 
-
-        # --- Trạng thái game ---
         self.state      = STATE_MENU
-        self.game_mode  = "story" # "story" hoặc "infinite"
+        self.game_mode  = "story"
         self.unlocked_infinite = is_story_finished()
-        self.score      = 0       # Điểm số hiện tại
-        self.lives      = 3       # Số mạng của người chơi
-        self.wave       = 1      # Bắt đầu từ wave 1
-        self.running    = True    # Game đang chạy?
-        self.game_over  = False   # Trạng thái Game Over
-        self.victory    = False   # Trạng thái chiến thắng
-
-        # Boss phase tracking
+        self.score      = 0
+        self.lives      = 3
+        self.wave       = 1
+        self.running    = True
+        self.game_over  = False
+        self.victory    = False
         self.boss_last_phase_hp = ENEMY_HP_BY_TYPE["boss"]
         
-        # --- Khởi tạo Âm thanh ---
         self.audio = AudioManager()
         self.audio.load_resources()
         self.audio.play_bgm() 
 
-
-        # --- UI Buttons for End Screens ---
         self.btn_restart = pygame.Rect(SCREEN_WIDTH // 2 - 210, SCREEN_HEIGHT // 2 + 60, 200, 50)
         self.btn_quit_game = pygame.Rect(SCREEN_WIDTH // 2 + 10, SCREEN_HEIGHT // 2 + 60, 200, 50)
 
@@ -479,23 +415,10 @@ class Game:
     # -------------------------------------------------------------------------
 
     def _update(self):
-        """
-        (Private) Cập nhật toàn bộ trạng thái game mỗi frame:
-        1. Cập nhật Player (di chuyển + bắn đạn).
-        2. Cập nhật tất cả Sprite khác (đạn bay, gà...).
-        3. Di chuyển đội hình gà.
-        4. Xử lý va chạm.
-        5. Kiểm tra điều kiện thắng/thua và chuyển wave.
-        """
-        # Cập nhật Player: di chuyển
+        """Cập nhật trạng thái game mỗi frame."""
         self.player.update()
-
-        # Xử lý bắn đạn (tách riêng để truyền Group vào)
         self.player.handle_shoot(self.all_sprites, self.bullets, self.audio)
 
-
-        # Cập nhật tất cả sprite còn lại (đạn bay lên, gà animation...)
-        # Dùng vòng lặp riêng để không gọi player.update() 2 lần
         for sprite in self.all_sprites:
             if sprite is not self.player:
                 if isinstance(sprite, Enemy):
@@ -503,35 +426,17 @@ class Game:
                 else:
                     sprite.update()
 
-
-
-        # Di chuyển đội hình gà và kiểm tra gà chạm đáy
-        # Giảm tốc độ hạ xuống (drop) nếu cần, ở đây ENEMY_DROP_Y trong settings
         fleet_reached_bottom = self.fleet.update()
         if fleet_reached_bottom:
             self.game_over = True
-            return  # Dừng update ngay lập tức
+            return
 
-        # Xử lý Logic Boss Phase (mất 1/5 HP)
         self._update_boss_phase()
-
-        # Xử lý va chạm đạn - gà
         self._handle_bullet_enemy_collision()
-
-        # Xử lý va chạm gà - player
         self._handle_enemy_player_collision()
-
-        # Xử lý va chạm trứng - player
         self._handle_egg_player_collision()
-
-        # Xử lý va chạm vật phẩm - player
         self._handle_powerup_collision()
-
-        # Xử lý va chạm laser - player
         self._handle_laser_player_collision()
-
-        # Kiểm tra điều kiện chuyển wave / chiến thắng
-
         self._check_wave_progression()
 
     # -------------------------------------------------------------------------
@@ -539,25 +444,11 @@ class Game:
     # -------------------------------------------------------------------------
 
     def _handle_bullet_enemy_collision(self):
-        """
-        (Private) Kiểm tra va chạm giữa đạn và gà.
+        """Kiểm tra va chạm giữa đạn và gà."""
+        hits = pygame.sprite.groupcollide(self.bullets, self.enemies, True, False)
 
-        Sử dụng groupcollide() của Pygame:
-        - Tham số True, True → Tự động xóa cả đạn lẫn gà khi va chạm.
-        - Mỗi cặp va chạm tính SCORE_PER_KILL điểm.
-        """
-        # hits là dict: {bullet: [danh sách enemy va chạm]}
-        hits = pygame.sprite.groupcollide(
-            self.bullets,  # Group 1: Đạn
-            self.enemies,  # Group 2: Gà
-            True,          # Xóa đạn sau va chạm
-            False          # Không xóa gà ngay, cần trừ máu
-        )
-
-        # Trừ máu từng enemy; chỉ cộng điểm khi enemy chết.
         for bullet, hit_enemies in hits.items():
             for enemy in hit_enemies:
-                # Tính sát thương dựa trên loại đạn
                 damage = BULLET_DAMAGE
                 if hasattr(bullet, 'bullet_type') and bullet.bullet_type == "pierce":
                     damage = BULLET_PIERCE_DAMAGE
@@ -566,15 +457,12 @@ class Game:
                     score_multiplier = enemy.max_hp
                     points = SCORE_PER_KILL * score_multiplier
                     
-                    # Áp dụng nhân hệ số cho Infinite Mode
                     if self.game_mode == "infinite":
                         points = int(points * (1 + 0.1 * self.wave))
                         
                     self.score += points
                     self.audio.play_chicken_exp()
 
-
-                    # --- Logic rơi PowerUp ---
                     if random.random() < POWERUP_DROP_RATE:
                         p_type = random.choice(list(POWERUP_TYPES.keys()))
                         p = PowerUp(enemy.rect.centerx, enemy.rect.centery, p_type)
@@ -582,22 +470,13 @@ class Game:
                         self.powerups.add(p)
 
     def _handle_enemy_player_collision(self):
-        """
-        (Private) Kiểm tra va chạm giữa đội hình gà và Player.
-
-        Nếu bất kỳ con gà nào chạm vào Player → Game Over ngay lập tức.
-        Sử dụng spritecollide() với dokill=False để chỉ phát hiện, không tự xóa.
-        """
+        """Kiểm tra va chạm giữa gà và người chơi."""
         collisions = pygame.sprite.spritecollide(
-            self.player,   # Sprite cần kiểm tra
-            self.enemies,  # Group để kiểm tra chồng lên
-            False,         # Không xóa tự động — để hiển thị Game Over trước
-            collided=pygame.sprite.collide_mask
+            self.player, self.enemies, False, collided=pygame.sprite.collide_mask
         )
 
         if collisions:
             if self.player.has_shield:
-                # Shield bảo vệ được 1 nhát: mất khiên và giết enemy va chạm
                 self.player.has_shield = False
                 self.player.shield_expire_time = 0
                 self.audio.play_explosion()
@@ -609,28 +488,18 @@ class Game:
                 if self.lives <= 0:
                     self.game_over = True
                 else:
-                    # Tạm thời reset vị trí player hoặc cho bất tử ngắn hạn
                     self._respawn_player()
 
 
 
     def _handle_egg_player_collision(self):
-        """
-        (Private) Kiểm tra va chạm giữa trứng và Player.
-
-        Nếu bất kỳ quả trứng nào chạm vào Player → Game Over ngay lập tức.
-        Sử dụng spritecollide() với dokill=False để chỉ phát hiện, không tự xóa.
-        """
+        """Kiểm tra va chạm giữa trứng và người chơi."""
         collisions = pygame.sprite.spritecollide(
-            self.player,  # Sprite cần kiểm tra
-            self.eggs,    # Group để kiểm tra chồng lên
-            False,        # Không xóa tự động — để hiển thị Game Over trước
-            collided=pygame.sprite.collide_mask
+            self.player, self.eggs, False, collided=pygame.sprite.collide_mask
         )
 
         if collisions:
             if self.player.has_shield:
-                # Shield bảo vệ được 1 nhát khỏi trứng
                 self.player.has_shield = False
                 self.player.shield_expire_time = 0
                 self.audio.play_explosion()
@@ -639,7 +508,7 @@ class Game:
             else:
                 self.audio.play_explosion()
                 self.lives -= 1
-                for egg in collisions: egg.kill() # Xóa quả trứng đã va chạm
+                for egg in collisions: egg.kill() 
                 if self.lives <= 0:
                     self.game_over = True
                 else:
@@ -672,18 +541,12 @@ class Game:
             self.score += 50
 
     def _handle_laser_player_collision(self):
-        """
-        (Private) Kiểm tra va chạm giữa tia laze của Boss và Player.
-        """
+        """Kiểm tra va chạm giữa tia laze của Boss và người chơi."""
         hits = pygame.sprite.spritecollide(
-            self.player,
-            self.lasers,
-            False,
-            collided=pygame.sprite.collide_mask
+            self.player, self.lasers, False, collided=pygame.sprite.collide_mask
         )
 
         if hits:
-            # Chỉ xử lý va chạm nếu tia laze đang ở trạng thái gây sát thương (Step 2)
             deadly_hits = [h for h in hits if getattr(h, "is_deadly", True)]
             
             if deadly_hits:
@@ -691,10 +554,13 @@ class Game:
                     self.player.has_shield = False
                     self.player.shield_expire_time = 0
                     self.audio.play_explosion()
-                    # Laser không bị mất khi chạm shield, nhưng shield bảo vệ được 1 lần
                 else:
                     self.audio.play_explosion()
-                    self.game_over = True
+                    self.lives -= 1
+                    if self.lives <= 0:
+                        self.game_over = True
+                    else:
+                        self._respawn_player()
 
 
     def _update_boss_phase(self):
@@ -725,9 +591,8 @@ class Game:
 
 
 
-    # -------------------------------------------------------------------------
-    # QUẢN LÝ WAVE / TIẾN TRÌNH GAME
-    # -------------------------------------------------------------------------
+    # --- QUẢN LÝ WAVE / TIẾN TRÌNH GAME ---
+
 
     def _check_wave_progression(self):
         """
@@ -758,7 +623,7 @@ class Game:
         self.lasers.empty()
 
         # Tăng tốc và tạo lại đội hình mới
-        self.fleet.increase_speed()
+        self.fleet.increase_speed(game_mode=self.game_mode)
         
         # Logic Infinite Mode: Mỗi 5 wave là Boss, còn lại random
         if self.game_mode == "infinite":
@@ -772,9 +637,8 @@ class Game:
             
         self.fleet.reset()
 
-    # -------------------------------------------------------------------------
-    # KHỞI ĐỘNG LẠI GAME
-    # -------------------------------------------------------------------------
+    # --- KHỞI ĐỘNG LẠI GAME ---
+
 
     def _restart(self):
         """(Private) Reset toàn bộ trạng thái về ban đầu để chơi lại."""
@@ -802,9 +666,8 @@ class Game:
         self.fleet = EnemyFleet(self.all_sprites, self.enemies, self.eggs, self.wave)
         self.fleet.speed_x = ENEMY_SPEED_X
 
-    # -------------------------------------------------------------------------
-    # RENDER / VẼ LÊN MÀN HÌNH
-    # -------------------------------------------------------------------------
+    # --- RENDER / VẼ LÊN MÀN HÌNH ---
+
 
     def _draw(self):
         """Vẽ toàn bộ frame hiện tại lên màn hình tùy theo state."""
@@ -856,12 +719,7 @@ class Game:
             pygame.draw.circle(self.screen, (brightness, brightness, brightness), (x, y), 1)
 
     def _draw_hud(self):
-        """
-        (Private) Vẽ giao diện thông tin (HUD) lên góc màn hình:
-        - Góc trên trái: Điểm số.
-        - Góc trên phải: Số Wave hiện tại.
-        - Cạnh dưới: Đường kẻ phân cách vùng Player.
-        """
+        """Vẽ giao diện thông tin (HUD) lên màn hình."""
         # Điểm số (góc trên trái)
         score_text = self.font_medium.render(f"SCORE: {self.score}", True, COLOR_WHITE)
         self.screen.blit(score_text, (15, 10))
@@ -969,54 +827,31 @@ class Game:
 
 
     def _draw_game_over_screen(self):
-        """
-        (Private) Vẽ màn hình Game Over bán trong suốt với điểm số cuối.
-        """
-        # Lớp phủ bán trong suốt màu đen đỏ
+        """Vẽ màn hình Game Over."""
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 160))
         self.screen.blit(overlay, (0, 0))
 
-        # Chữ GAME OVER
         go_text = self.font_large.render("GAME OVER", True, COLOR_RED)
-        self.screen.blit(go_text, (
-            SCREEN_WIDTH // 2 - go_text.get_width() // 2,
-            SCREEN_HEIGHT // 2 - 60
-        ))
+        self.screen.blit(go_text, (SCREEN_WIDTH // 2 - go_text.get_width() // 2, SCREEN_HEIGHT // 2 - 60))
 
-        # Điểm số cuối
         score_text = self.font_medium.render(f"Final Score: {self.score}", True, COLOR_WHITE)
-        self.screen.blit(score_text, (
-            SCREEN_WIDTH // 2 - score_text.get_width() // 2,
-            SCREEN_HEIGHT // 2
-        ))
+        self.screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, SCREEN_HEIGHT // 2))
 
-        # Nút Chơi lại và Thoát
         ui.draw_button(self.screen, "RESTART [R]", self.btn_restart, COLOR_GREEN, COLOR_BLACK)
         ui.draw_button(self.screen, "QUIT [ESC]", self.btn_quit_game, COLOR_RED, COLOR_WHITE)
 
     def _draw_victory_screen(self):
-        """
-        (Private) Vẽ màn hình chiến thắng khi người chơi qua hết tất cả wave.
-        """
+        """Vẽ màn hình chiến thắng."""
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 160))
         self.screen.blit(overlay, (0, 0))
 
-        # Chữ CHIẾN THẮNG
         win_text = self.font_large.render("CHIEN THANG!", True, COLOR_GREEN)
-        self.screen.blit(win_text, (
-            SCREEN_WIDTH // 2 - win_text.get_width() // 2,
-            SCREEN_HEIGHT // 2 - 60
-        ))
+        self.screen.blit(win_text, (SCREEN_WIDTH // 2 - win_text.get_width() // 2, SCREEN_HEIGHT // 2 - 60))
 
-        # Điểm số
         score_text = self.font_medium.render(f"Total Score: {self.score}", True, COLOR_WHITE)
-        self.screen.blit(score_text, (
-            SCREEN_WIDTH // 2 - score_text.get_width() // 2,
-            SCREEN_HEIGHT // 2
-        ))
+        self.screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, SCREEN_HEIGHT // 2))
 
-        # Nút Chơi lại và Thoát
         ui.draw_button(self.screen, "RESTART [R]", self.btn_restart, COLOR_GREEN, COLOR_BLACK)
         ui.draw_button(self.screen, "QUIT [ESC]", self.btn_quit_game, COLOR_RED, COLOR_WHITE)
